@@ -1,9 +1,6 @@
 import streamlit as st
 from modulos.config.conexion import obtener_conexion
 
-# ---------------------------------------------------------
-# Interfaz principal del rol Promotora
-# ---------------------------------------------------------
 def interfaz_promotora():
     st.title("👩‍💼 Panel de Promotora")
 
@@ -17,8 +14,6 @@ def interfaz_promotora():
 
     try:
         cursor = con.cursor(dictionary=True)
-
-        # Buscar los grupos asignados a esta promotora
         cursor.execute("""
             SELECT g.Id_Grupo, g.Nombre_del_grupo, g.Fecha_de_inicio, g.Tasa_de_intereses
             FROM Grupo g
@@ -36,7 +31,6 @@ def interfaz_promotora():
                 st.write(f"📅 Fecha de inicio: {g['Fecha_de_inicio']}")
                 st.write(f"💰 Tasa de interés: {g['Tasa_de_intereses']}%")
                 st.divider()
-
     except Exception as e:
         st.error(f"Error al consultar los datos: {e}")
     finally:
