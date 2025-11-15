@@ -1,9 +1,8 @@
+#app.py
 import streamlit as st
-from modulos.login import login
-
-# Si NO hay sesión, pedir login
-if not st.session_state.get("sesion_iniciada"):
-    login()
-    st.stop()  # Evita que el resto del código siga sin login
-
+from modulos.venta import mostrar_venta # Importamos la función mostrar_venta del módulo venta
+from modulos.login import login 
+# Llamamos a la función mostrar_venta para mostrar el mensaje de la app
+mostrar_venta() 
+login() 
 
