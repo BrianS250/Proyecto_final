@@ -1,115 +1,63 @@
 import streamlit as st
-import pandas as pd
 from modulos.config.conexion import obtener_conexion
 
-# --------------------------------------------------------
-# 👩‍💼 PANEL PRINCIPAL DE PROMOTORA
-# --------------------------------------------------------
+# ---------------------------------------------------------
+# Interfaz principal del rol Promotora
+# ---------------------------------------------------------
 def interfaz_promotora():
     st.title("👩‍💼 Panel de Promotora")
-    st.write(f"Bienvenida, {st.session_state['usuario']}")
 
+    usuario = st.session_state.get("usuario", "Desconocido")
+
+    st.sidebar.success(f"Sesión iniciada: {usuario} (Promotora)")
+
+    # Conexión con la base de datos
     con = obtener_conexion()
     if not con:
-        st.error("❌ No se pudo conectar a la base de datos.")
+        st.error("⚠️ No se pudo conectar a la base de datos.")
         return
 
-    cursor = con.cursor(dictionary=True)
+    try:
+        cursor = con.cursor(dictionary=True)
 
-    # Menú lateral
-    opcion = st.sidebar.radio(
-        "Seleccione una opción",
-        ("🏠 Grupos asignados", "💰 Resumen financiero", "⬇️ Reporte consolidado")
-    )
+        # Buscar el ID de la promotora según su usuario
+        cursor.execute("SELECT Id_Empleado FROM Empleado WHERE Usuario = %s", (usuario,))
+        promotora = cursor.fetchone()
 
-    # --------------------------------------------------------
-    # 1️⃣ GRUPOS ASIGNADOS
-    # --------------------------------------------------------
-    if opcion == "🏠 Grupos asignados":
-        st.subheader("👥 Grupos bajo su supervisión")
-        try:
-            query = """
-                SELECT Id_Grupo, NombreGrupo, FechaInicio, TasaInteres, 
-                       PeriodicidadReuniones, TipoMulta
-                FROM Grupo 
-                WHERE Id_Promotora = %s
-            """
-            cursor.execute(query, (st.session_state["id_usuario"],))
-            grupos = cursor.fetchall()
+        if not promotora:
+            st.warning("No se encontró información de esta promotora.")
+            return
 
-            if grupos:
-                st.dataframe(pd.DataFrame(grupos))
-            else:
-                st.info("No tiene grupos asignados actualmente.")
-        except Exception as e:
-            st.error(f"⚠️ Error al cargar los grupos: {e}")
+        id_promotora = promotora["Id_Empleado"]
 
-    # --------------------------------------------------------
-    # 2️⃣ RESUMEN FINANCIERO
-    # --------------------------------------------------------
-    elif opcion == "💰 Resumen financiero":
-        st.subheader("💰 Información financiera consolidada")
+        # Consultar los grupos bajo su supervisión
+        cursor.execute("""
+            SELECT Id_Grupo, Nombre_del_grupo, Fecha_de_inicio, Tasa_de_intereses,
+                   Periodicidad_de_reuniones, Tipo_de_multa
+            FROM Grupo
+            WHERE Id_Promotora = %s
+        """, (id_promotora,))
 
-        try:
-            query_finanzas = """
-                SELECT g.NombreGrupo,
-                       COALESCE(SUM(a.Monto), 0) AS TotalAhorros,
-                       COALESCE(SUM(p.Monto), 0) AS TotalPrestamos
-                FROM Grupo g
-                LEFT JOIN Ahorro a ON g.Id_Grupo = a.Id_Grupo
-                LEFT JOIN Prestamo p ON g.Id_Grupo = p.Id_Grupo
-                WHERE g.Id_Promotora = %s
-                GROUP BY g.Id_Grupo, g.NombreGrupo
-            """
-            cursor.execute(query_finanzas, (st.session_state["id_usuario"],))
-            resumen = cursor.fetchall()
+        grupos = cursor.fetchall()
 
-            if resumen:
-                df = pd.DataFrame(resumen)
-                st.dataframe(df)
-            else:
-                st.info("No se encontró información financiera disponible.")
-        except Exception as e:
-            st.error(f"⚠️ Error al generar resumen: {e}")
+        if not grupos:
+            st.info("No hay grupos asignados a esta promotora.")
+        else:
+            st.subheader("📋 Grupos bajo tu supervisión")
 
-    # --------------------------------------------------------
-    # 3️⃣ REPORTE CONSOLIDADO DESCARGABLE
-    # --------------------------------------------------------
-    elif opcion == "⬇️ Reporte consolidado":
-        st.subheader("📊 Generar y descargar reporte general")
+            for grupo in grupos:
+                with st.expander(f"👥 {grupo['Nombre_del_grupo']}"):
+                    st.write(f"**ID:** {grupo['Id_Grupo']}")
+                    st.write(f"**Inicio:** {grupo['Fecha_de_inicio']}")
+                    st.write(f"**Tasa de interés:** {grupo['Tasa_de_intereses']}%")
+                    st.write(f"**Periodicidad:** {grupo['Periodicidad_de_reuniones']}")
+                    st.write(f"**Tipo de multa:** {grupo['Tipo_de_multa']}")
 
-        try:
-            query_reporte = """
-                SELECT g.NombreGrupo, d.Nombre AS Distrito,
-                       COALESCE(SUM(a.Monto), 0) AS TotalAhorros,
-                       COALESCE(SUM(p.Monto), 0) AS TotalPrestamos,
-                       COUNT(DISTINCT r.Id_Reunion) AS Reuniones
-                FROM Grupo g
-                LEFT JOIN Ahorro a ON g.Id_Grupo = a.Id_Grupo
-                LEFT JOIN Prestamo p ON g.Id_Grupo = p.Id_Grupo
-                LEFT JOIN Reunion r ON g.Id_Grupo = r.Id_Grupo
-                LEFT JOIN Distrito d ON g.Id_Distrito = d.Id_Distrito
-                WHERE g.Id_Promotora = %s
-                GROUP BY g.Id_Grupo
-            """
-            cursor.execute(query_reporte, (st.session_state["id_usuario"],))
-            data = cursor.fetchall()
+            # Botón para exportar
+            if st.button("📤 Descargar reporte consolidado"):
+                st.success("✅ Función de descarga próximamente disponible.")
 
-            if data:
-                df = pd.DataFrame(data)
-                st.dataframe(df)
-
-                # Botón de descarga CSV
-                csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="⬇️ Descargar reporte en CSV",
-                    data=csv,
-                    file_name="Reporte_Promotora.csv",
-                    mime="text/csv"
-                )
-            else:
-                st.info("No hay datos disponibles para el reporte.")
-        except Exception as e:
-            st.error(f"⚠️ Error al generar el reporte: {e}")
-
-    con.close()
+    except Exception as e:
+        st.error(f"❌ Error al cargar grupos: {e}")
+    finally:
+        con.close()
