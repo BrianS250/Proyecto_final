@@ -1,7 +1,8 @@
 # app.py
 import streamlit as st
 from modulos.login import login
-from modulos.venta import mostrar_venta
+from empleados import mostrar_venta
+
 
 # Verificamos si la sesión ya está iniciada
 if "sesion_iniciada" in st.session_state and st.session_state["sesion_iniciada"]:
