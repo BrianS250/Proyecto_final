@@ -18,42 +18,26 @@ def interfaz_promotora():
     try:
         cursor = con.cursor(dictionary=True)
 
-        # Buscar el ID de la promotora según su usuario
-        cursor.execute("SELECT Id_Empleado FROM Empleado WHERE Usuario = %s", (usuario,))
-        promotora = cursor.fetchone()
-
-        if not promotora:
-            st.warning("No se encontró información de esta promotora.")
-            return
-
-        id_promotora = promotora["Id_Empleado"]
-
-        # Consultar los grupos supervisados por esta promotora
+        # Buscar los grupos asignados a esta promotora
         cursor.execute("""
-            SELECT Id_Grupo, Nombre_del_grupo, Fecha_de_inicio, Tasa_de_intereses,
-                   Periodicidad_de_reuniones, Tipo_de_multa
-            FROM Grupo
-            WHERE Id_Promotora = %s
-        """, (id_promotora,))
+            SELECT g.Id_Grupo, g.Nombre_del_grupo, g.Fecha_de_inicio, g.Tasa_de_intereses
+            FROM Grupo g
+            INNER JOIN Empleado e ON g.Id_Promotora = e.Id_Empleado
+            WHERE e.Usuario = %s
+        """, (usuario,))
         grupos = cursor.fetchall()
 
         if not grupos:
-            st.info("No hay grupos asignados a esta promotora.")
+            st.warning("⚠️ No hay grupos asignados a esta promotora.")
         else:
-            st.subheader("📋 Grupos bajo tu supervisión")
-            for grupo in grupos:
-                with st.expander(f"👥 {grupo['Nombre_del_grupo']}"):
-                    st.write(f"**ID del grupo:** {grupo['Id_Grupo']}")
-                    st.write(f"**Fecha de inicio:** {grupo['Fecha_de_inicio']}")
-                    st.write(f"**Tasa de interés:** {grupo['Tasa_de_intereses']}%")
-                    st.write(f"**Periodicidad:** {grupo['Periodicidad_de_reuniones']}")
-                    st.write(f"**Tipo de multa:** {grupo['Tipo_de_multa']}")
-
-            st.markdown("---")
-            if st.button("📤 Descargar reporte consolidado"):
-                st.success("✅ Función de descarga disponible próximamente.")
+            st.subheader("📋 Grupos bajo supervisión")
+            for g in grupos:
+                st.write(f"**Nombre:** {g['Nombre_del_grupo']}")
+                st.write(f"📅 Fecha de inicio: {g['Fecha_de_inicio']}")
+                st.write(f"💰 Tasa de interés: {g['Tasa_de_intereses']}%")
+                st.divider()
 
     except Exception as e:
-        st.error(f"❌ Error al cargar grupos: {e}")
+        st.error(f"Error al consultar los datos: {e}")
     finally:
         con.close()
