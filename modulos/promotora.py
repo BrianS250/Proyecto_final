@@ -1,39 +1,54 @@
 import streamlit as st
-import mysql.connector
-
-def obtener_conexion():
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="",
-        database="btfcfbzptdyxq4f8afmu"
-    )
 
 def interfaz_promotora():
-    st.title("👩‍💼 Panel de Promotora del Grupo")
-    st.write("Registra pagos, reuniones y reportes de actividades.")
+    st.title("👩‍💼 Panel de Promotora")
+    st.write("Supervisa tus grupos, registra nuevos y valida información financiera.")
 
-    opcion = st.sidebar.radio("Selecciona una opción:", [
-        "Registrar asistencia",
-        "Registrar pago de préstamo",
-        "Generar reporte de actividades"
-    ])
+    opciones = [
+        "Consultar grupos",
+        "Registrar nuevo grupo",
+        "Validar información financiera",
+        "Reportes consolidados"
+    ]
 
-    if opcion == "Registrar asistencia":
-        st.subheader("🗓️ Registro de asistencia")
-        nombre = st.text_input("Nombre del miembro")
-        fecha = st.date_input("Fecha de asistencia")
+    seleccion = st.sidebar.radio("Selecciona una opción:", opciones)
 
-        if st.button("Registrar asistencia"):
-            if nombre:
-                try:
-                    con = obtener_conexion()
-                    cur = con.cursor()
-                    cur.execute("INSERT INTO Asistencia (Id_Asistencia) VALUES (NULL)")
-                    con.commit()
-                    con.close()
-                    st.success(f"✅ Asistencia de {nombre} registrada correctamente.")
-                except Exception as e:
-                    st.error(f"Error al registrar asistencia: {e}")
-            else:
-                st.warning("⚠️ Ingresa el nombre del miembro.")
+    if seleccion == "Consultar grupos":
+        pagina_consultar_grupos()
+
+    elif seleccion == "Registrar nuevo grupo":
+        pagina_registrar_grupo()
+
+    elif seleccion == "Validar información financiera":
+        pagina_validar_finanzas()
+
+    elif seleccion == "Reportes consolidados":
+        pagina_reportes()
+
+
+# ======== PÁGINAS ========
+
+def pagina_consultar_grupos():
+    st.header("📋 Grupos Asignados")
+    st.info("Grupo Mujeres Unidas")
+    st.info("Grupo Esperanza")
+
+
+def pagina_registrar_grupo():
+    st.header("📝 Registrar nuevo grupo")
+    nombre = st.text_input("Nombre del grupo")
+    inicio = st.date_input("Fecha de inicio")
+    tasa = st.number_input("Tasa de interés (%)", min_value=0.0, step=0.1)
+    periodicidad = st.selectbox("Periodicidad de reuniones", ["Semanal", "Quincenal", "Mensual"])
+    if st.button("Registrar grupo"):
+        st.success("Grupo registrado correctamente.")
+
+
+def pagina_validar_finanzas():
+    st.header("💵 Validar información financiera")
+    st.success("Aquí podrás revisar préstamos, pagos y movimientos.")
+
+
+def pagina_reportes():
+    st.header("📊 Reportes consolidados")
+    st.info("Generación de reportes financieros generales.")
