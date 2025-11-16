@@ -27,16 +27,21 @@ def main():
     # Si la sesión está iniciada → mostrar panel según rol
     if st.session_state["sesion_iniciada"]:
         usuario = st.session_state["usuario"]
-        rol = st.session_state["rol"].strip().lower()  # Normaliza el texto
+        rol_original = st.session_state["rol"]
+        rol = rol_original.strip().lower()  # Normaliza texto
 
-        st.sidebar.success(f"Sesión iniciada como: {usuario} ({st.session_state['rol']})")
+        # Información visible en barra lateral
+        st.sidebar.success(f"Sesión iniciada como: {usuario} ({rol_original})")
+        st.sidebar.write(f"🧠 Rol detectado (depuración): '{rol}'")  # 👈 Depuración temporal
         st.sidebar.button("Cerrar sesión", on_click=cerrar_sesion)
 
-        # Mostrar la interfaz según el rol
+        # --------------------------------------------------
+        # Panel según rol detectado
+        # --------------------------------------------------
         if rol == "promotora":
             interfaz_promotora()
 
-        elif rol in ["directiva", "director"]:
+        elif rol in ["director", "directora", "directivo", "directiva"]:
             interfaz_directiva()
 
         elif rol == "administrador":
@@ -48,7 +53,7 @@ def main():
             st.warning("⚠️ Rol no reconocido. Contacta al administrador.")
 
     else:
-        # Si no hay sesión → mostrar el login
+        # Si no hay sesión → mostrar login
         login()
 
 # --------------------------------------------------
