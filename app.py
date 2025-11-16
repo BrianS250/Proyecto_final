@@ -1,5 +1,5 @@
 import streamlit as st
-from modulos.login import login, mostrar_interfaz_unica
+from modulos.login import login
 from modulos.promotora import interfaz_promotora
 from modulos.directiva import interfaz_directiva
 
@@ -18,13 +18,13 @@ def cerrar_sesion():
 def main():
     st.sidebar.title("📋 Menú principal")
 
-    # Inicializar estado de sesión
+    # Inicializar variables de sesión si no existen
     if "sesion_iniciada" not in st.session_state:
         st.session_state["sesion_iniciada"] = False
     if "rol" not in st.session_state:
         st.session_state["rol"] = ""
 
-    # Si hay sesión activa → mostrar panel correspondiente
+    # Si la sesión está iniciada → mostrar panel según rol
     if st.session_state["sesion_iniciada"]:
         usuario = st.session_state["usuario"]
         rol = st.session_state["rol"]
@@ -32,7 +32,7 @@ def main():
         st.sidebar.success(f"Sesión iniciada como: {usuario} ({rol})")
         st.sidebar.button("Cerrar sesión", on_click=cerrar_sesion)
 
-        # Mostrar interfaz según el rol
+        # Mostrar la interfaz según el rol
         if rol == "Promotora":
             interfaz_promotora()
         elif rol == "Directiva":
@@ -42,9 +42,9 @@ def main():
             st.info("Visualiza el panorama completo de los distritos y grupos.")
             st.warning("🔧 Este módulo está en desarrollo.")
         else:
-            st.warning("⚠️ Rol no reconocido, contacta al administrador.")
+            st.warning("⚠️ Rol no reconocido. Contacta al administrador.")
     else:
-        # Si no hay sesión iniciada → mostrar login
+        # Si no hay sesión → mostrar el login
         login()
 
 # --------------------------------------------------
