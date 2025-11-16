@@ -1,48 +1,22 @@
 import streamlit as st
-from modulos.venta import mostrar_venta
-from modulos.promotora import panel_promotora
 from modulos.config.conexion import obtener_conexion
 
-# --------------------------
-# FUNCIÓN DE LOGIN
-# --------------------------
 def login():
-    st.title("🔐 Inicio de Sesión")
-
+    st.title("🔐 Iniciar sesión")
     usuario = st.text_input("Usuario")
-    contrasena = st.text_input("Contraseña", type="password")
-    btn = st.button("Iniciar sesión")
+    contra = st.text_input("Contraseña", type="password")
 
-    if btn:
+    if st.button("Iniciar sesión"):
         con = obtener_conexion()
-        cur = con.cursor(dictionary=True)
-        cur.execute("SELECT * FROM Empleado WHERE Usuario = %s AND Contra = %s", (usuario, contrasena))
-        datos = cur.fetchone()
-        cur.close()
-        con.close()
+        cur = con.cursor()
+        cur.execute("SELECT Usuario, Contra, Rol FROM Empleado WHERE Usuario=%s AND Contra=%s", (usuario, contra))
+        fila = cur.fetchone()
 
-        if datos:
+        if fila:
             st.session_state["sesion_iniciada"] = True
-            st.session_state["usuario"] = datos["Usuario"]
-            st.session_state["rol"] = datos["Rol"]
-            st.session_state["id_empleado"] = datos["Id_Empleado"]
+            st.session_state["usuario"] = fila[0]
+            st.session_state["rol"] = fila[2]
+            st.success(f"Bienvenido, {fila[0]} ({fila[2]})")
             st.rerun()
         else:
-            st.error("❌ Usuario o contraseña incorrectos.")
-
-
-# --------------------------
-# FUNCIÓN PRINCIPAL SEGÚN ROL
-# --------------------------
-def mostrar_interfaz_unica():
-    rol = st.session_state.get("rol", "").lower()
-
-    if rol == "admin":
-        st.success("✅ Bienvenido Administrador")
-        mostrar_venta()
-
-    elif rol == "promotora":
-        panel_promotora(id_promotora=st.session_state["id_empleado"])
-
-    else:
-        st.warning("⚠️ Rol no reconocido, contacta al administrador.")
+            st.error("❌ Usuario o contraseña incorrectos")
