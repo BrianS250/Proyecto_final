@@ -1,19 +1,39 @@
 import streamlit as st
-from modulos.conexion import obtener_conexion
+import mysql.connector
+
+def obtener_conexion():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="",
+        database="btfcfbzptdyxq4f8afmu"
+    )
 
 def interfaz_promotora():
-    st.header("👩‍💼 Panel de Promotora")
+    st.title("👩‍💼 Panel de Promotora del Grupo")
+    st.write("Registra pagos, reuniones y reportes de actividades.")
 
-    con = obtener_conexion()
-    cursor = con.cursor()
+    opcion = st.sidebar.radio("Selecciona una opción:", [
+        "Registrar asistencia",
+        "Registrar pago de préstamo",
+        "Generar reporte de actividades"
+    ])
 
-    cursor.execute("SELECT Id_Multa, Monto, Estado FROM Multa WHERE Estado='Pendiente'")
-    multas = cursor.fetchall()
+    if opcion == "Registrar asistencia":
+        st.subheader("🗓️ Registro de asistencia")
+        nombre = st.text_input("Nombre del miembro")
+        fecha = st.date_input("Fecha de asistencia")
 
-    st.subheader("📌 Multas Pendientes")
-    if multas:
-        for multa in multas:
-            st.write(f"ID: {multa[0]} | Monto: ${multa[1]} | Estado: {multa[2]}")
-    else:
-        st.info("No hay multas pendientes por el momento.")
-
+        if st.button("Registrar asistencia"):
+            if nombre:
+                try:
+                    con = obtener_conexion()
+                    cur = con.cursor()
+                    cur.execute("INSERT INTO Asistencia (Id_Asistencia) VALUES (NULL)")
+                    con.commit()
+                    con.close()
+                    st.success(f"✅ Asistencia de {nombre} registrada correctamente.")
+                except Exception as e:
+                    st.error(f"Error al registrar asistencia: {e}")
+            else:
+                st.warning("⚠️ Ingresa el nombre del miembro.")
