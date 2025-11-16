@@ -10,6 +10,7 @@ def interfaz_directiva():
         "Registrar reunión y asistencia",
         "Registrar préstamos o pagos",
         "Aplicar multas",
+        "Ver multas registradas",
         "Generar actas y reportes"
     ])
 
@@ -30,7 +31,6 @@ def interfaz_directiva():
                 con = obtener_conexion()
                 cursor = con.cursor()
 
-                # Inserta en la tabla Multa según tu estructura
                 cursor.execute("""
                     INSERT INTO Multa (Monto, Fecha_aplicacion, Estado, Id_Tipo_multa, Id_Usuario)
                     VALUES (%s, %s, %s, %s, %s)
@@ -42,3 +42,26 @@ def interfaz_directiva():
                 st.error(f"❌ Error al registrar la multa: {e}")
             finally:
                 con.close()
+
+    # -------------------------------------------------------------------------
+    # 📊 OPCIÓN: VER MULTAS REGISTRADAS
+    # -------------------------------------------------------------------------
+    elif opcion == "Ver multas registradas":
+        st.subheader("📋 Multas registradas")
+
+        try:
+            con = obtener_conexion()
+            cursor = con.cursor()
+            cursor.execute("SELECT Id_Multa, Monto, Fecha_aplicacion, Estado, Id_Tipo_multa, Id_Usuario FROM Multa")
+            resultados = cursor.fetchall()
+
+            if resultados:
+                import pandas as pd
+                df = pd.DataFrame(resultados, columns=["ID", "Monto", "Fecha", "Estado", "Tipo", "Usuario"])
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.info("No hay multas registradas actualmente.")
+        except Exception as e:
+            st.error(f"❌ Error al consultar las multas: {e}")
+        finally:
+            con.close()
