@@ -8,17 +8,19 @@ def login():
     contra = st.text_input("Contraseña", type="password")
 
     if st.button("Iniciar sesión"):
-        conexion = obtener_conexion()
-        cursor = conexion.cursor()
-        cursor.execute("SELECT Usuario, Contra, Rol FROM Empleado WHERE Usuario=%s AND Contra=%s", (usuario, contra))
+        con = obtener_conexion()
+        cursor = con.cursor()
+
+        cursor.execute(
+            "SELECT Usuario, Contra, Rol FROM Empleado WHERE Usuario=%s AND Contra=%s",
+            (usuario, contra)
+        )
         fila = cursor.fetchone()
 
         if fila:
             st.session_state["sesion_iniciada"] = True
-            st.session_state["usuario"] = fila[0]
             st.session_state["rol"] = fila[2]
-            st.success(f"Bienvenido, {fila[0]} ({fila[2]})")
+            st.success(f"✅ Bienvenido, {fila[0]} ({fila[2]})")
+            st.rerun()
         else:
-            st.error("Usuario o contraseña incorrectos.")
-
-        conexion.close()
+            st.error("❌ Usuario o contraseña incorrectos")
