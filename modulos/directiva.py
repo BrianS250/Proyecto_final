@@ -1,57 +1,61 @@
 import streamlit as st
-from modulos.login import login
-from modulos.promotora import interfaz_promotora
-from modulos.directiva import interfaz_directiva
 
 # --------------------------------------------------
-# 🚪 FUNCIÓN PARA CERRAR SESIÓN
+# 🧩 INTERFAZ DE DIRECTIVA DEL GRUPO
 # --------------------------------------------------
-def cerrar_sesion():
-    st.session_state["sesion_iniciada"] = False
-    st.session_state["usuario"] = ""
-    st.session_state["rol"] = ""
-    st.rerun()
+def interfaz_directiva():
+    st.title("👩‍💼 Panel de Directiva del Grupo")
+    st.write("Registra reuniones, préstamos, multas y reportes del grupo.")
 
-# --------------------------------------------------
-# 🏠 APLICACIÓN PRINCIPAL
-# --------------------------------------------------
-def main():
-    st.sidebar.title("📋 Menú principal")
+    # Menú lateral de opciones
+    opcion = st.sidebar.radio(
+        "Selecciona una opción:",
+        [
+            "📅 Registrar reunión y asistencia",
+            "💰 Registrar préstamos o pagos",
+            "⚠️ Aplicar multas",
+            "📊 Generar actas y reportes"
+        ]
+    )
 
-    # Inicializar variables de sesión si no existen
-    if "sesion_iniciada" not in st.session_state:
-        st.session_state["sesion_iniciada"] = False
-    if "rol" not in st.session_state:
-        st.session_state["rol"] = ""
+    # --------------------------------------------------
+    # OPCIÓN 1 — Reuniones y asistencias
+    # --------------------------------------------------
+    if opcion == "📅 Registrar reunión y asistencia":
+        st.subheader("📅 Registro de reunión")
+        fecha = st.date_input("Fecha de la reunión")
+        tema = st.text_input("Tema principal")
+        asistentes = st.text_area("Lista de asistentes (separados por comas)")
+        if st.button("Guardar reunión"):
+            st.success("✅ Reunión registrada correctamente")
 
-    # Si la sesión está iniciada → mostrar panel según rol
-    if st.session_state["sesion_iniciada"]:
-        usuario = st.session_state["usuario"]
-        rol = st.session_state["rol"]
+    # --------------------------------------------------
+    # OPCIÓN 2 — Préstamos y pagos
+    # --------------------------------------------------
+    elif opcion == "💰 Registrar préstamos o pagos":
+        st.subheader("💰 Registro de préstamos o pagos")
+        tipo = st.selectbox("Tipo de registro", ["Préstamo", "Pago"])
+        monto = st.number_input("Monto ($)", min_value=0.01, step=0.01)
+        descripcion = st.text_area("Descripción")
+        if st.button("Guardar movimiento"):
+            st.success(f"✅ {tipo} registrado correctamente por ${monto:.2f}")
 
-        st.sidebar.success(f"Sesión iniciada como: {usuario} ({rol})")
-        st.sidebar.button("Cerrar sesión", on_click=cerrar_sesion)
+    # --------------------------------------------------
+    # OPCIÓN 3 — Multas
+    # --------------------------------------------------
+    elif opcion == "⚠️ Aplicar multas":
+        st.subheader("⚠️ Aplicación de multas")
+        miembro = st.text_input("Nombre del miembro sancionado")
+        motivo = st.text_area("Motivo de la multa")
+        monto_multa = st.number_input("Monto de la multa ($)", min_value=0.0, step=0.5)
+        if st.button("Registrar multa"):
+            st.success(f"✅ Multa aplicada a {miembro} por ${monto_multa:.2f}")
 
-        # Mostrar la interfaz según el rol
-        if rol == "Promotora":
-            interfaz_promotora()
-
-        elif rol in ["Directiva", "Director", "director"]:
-            interfaz_directiva()
-
-        elif rol == "Administrador":
-            st.title("🛠️ Panel de Administrador")
-            st.info("Visualiza el panorama completo de los distritos y grupos.")
-            st.warning("🔧 Este módulo está en desarrollo.")
-
-        else:
-            st.warning("⚠️ Rol no reconocido. Contacta al administrador.")
-    else:
-        # Si no hay sesión → mostrar el login
-        login()
-
-# --------------------------------------------------
-# 🚀 EJECUCIÓN PRINCIPAL
-# --------------------------------------------------
-if __name__ == "__main__":
-    main()
+    # --------------------------------------------------
+    # OPCIÓN 4 — Reportes
+    # --------------------------------------------------
+    elif opcion == "📊 Generar actas y reportes":
+        st.subheader("📊 Reportes del grupo")
+        st.info("Genera actas de reuniones, listados de aportes y balances financieros.")
+        if st.button("Descargar reporte general"):
+            st.success("📁 Reporte generado y listo para descargar.")
