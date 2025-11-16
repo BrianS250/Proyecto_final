@@ -1,5 +1,6 @@
 import streamlit as st
-from modulos.configuracion.conexion import obtener_conexion
+from modulos.Configuración.conexion import obtener_conexion
+
 
 
 def login():
