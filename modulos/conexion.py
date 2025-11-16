@@ -6,9 +6,8 @@ def obtener_conexion():
         user="uXXXXXX",        # Tu usuario real de Clever Cloud
         password="pXXXXXX",    # Tu contraseña real
         database="btfcfbzptdyxq4f8afmu",  # Nombre exacto de la base
-        port=3306              # Puerto estándar de MySQL
+        port=3306
     )
 
-    )
 
 
