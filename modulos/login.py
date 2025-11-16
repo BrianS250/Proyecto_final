@@ -1,5 +1,6 @@
 import streamlit as st
-from modulos.config.conexion import obtener_conexion
+from modulos.configuracion.conexion import obtener_conexion
+
 
 def login():
     st.title("🔐 Iniciar sesión")
