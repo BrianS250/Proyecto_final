@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import date
-from modulos.Configuración.conexion import obtener_conexion
+from modulos.configuracion.conexion import obtener_conexion
+
 
 def interfaz_directiva():
     st.title("👩‍💼 Panel de Directiva del Grupo")
