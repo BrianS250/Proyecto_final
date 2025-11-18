@@ -5,69 +5,56 @@ from modulos.conexion import obtener_conexion
 
 
 # ---------------------------------------------------------
-# 🟦 PANEL PRINCIPAL (MEJORADO PARA ROLES)
+# 🟦 PANEL PRINCIPAL (CONTROL DE ACCESO)
 # ---------------------------------------------------------
 def interfaz_directiva():
 
-    rol = st.session_state.get("rol", "invitado")
+    rol = st.session_state.get("rol", "").lower()
 
-    # TÍTULO SEGÚN EL ROL
+    # 💠 Título dinámico según el rol
     if rol == "director":
-        st.title("👩‍💼 Panel de la Directiva del Grupo")
+        st.title("👨‍💼 Panel de la Directiva del Grupo")
         st.write("Administre reuniones, asistencia y multas.")
-    elif rol == "admin":
-        st.title("🧑‍💼 Panel del Administrador")
-        st.info("Puedes usar el sistema, pero no tienes acceso a asistencia ni multas.")
-    elif rol == "promotora":
-        st.title("👩‍🔧 Panel de la Promotora")
-        st.info("Puedes usar el sistema, pero no tienes acceso a asistencia ni multas.")
     else:
-        st.title("Acceso al sistema")
+        st.title("📋 Acceso al sistema")
+        st.info("⚠ Acceso limitado. Solo el Director puede administrar asistencia y multas.")
+        st.success("Puedes seguir usando otras funciones del sistema.")
+        return  # ⛔ NO MOSTRAR MENÚ NI NADA MÁS PARA ADMIN Y PROMOTORA
 
-    # BOTÓN DE CERRAR SESIÓN
+    # Botón cerrar sesión
     if st.sidebar.button("🔒 Cerrar sesión"):
         st.session_state.clear()
         st.rerun()
 
-    # DIRECTOR → acceso total
-    if rol == "director":
-        menu = st.sidebar.radio(
-            "Seleccione una sección:",
-            ["Registro de asistencia", "Aplicar multas"]
-        )
-        if menu == "Registro de asistencia":
-            pagina_asistencia()
-        else:
-            pagina_multas()
+    # Menú SOLO para director
+    menu = st.sidebar.radio(
+        "Seleccione una sección:",
+        ["Registro de asistencia", "Aplicar multas"]
+    )
 
-    # ADMIN / PROMOTORA → acceso limitado
+    if menu == "Registro de asistencia":
+        pagina_asistencia()
     else:
-        st.warning("⚠ Acceso restringido. Esta sección es exclusiva para el Director.")
-        return
-
+        pagina_multas()
 
 
 # ---------------------------------------------------------
-# 🟩 REGISTRO DE ASISTENCIA (TU CÓDIGO TAL COMO ESTABA)
+# 🟩 REGISTRO DE ASISTENCIA
 # ---------------------------------------------------------
 def pagina_asistencia():
 
     st.header("📝 Registro de asistencia del grupo")
 
     con = obtener_conexion()
-    if not con:
-        st.error("No se pudo conectar a la BD.")
-        return
-
     cursor = con.cursor()
 
-    # Fecha
     fecha_raw = st.date_input("📅 Fecha de reunión", value=date.today())
     fecha = fecha_raw.strftime("%Y-%m-%d")
 
-    # Buscar o crear reunión
     cursor.execute("""
-        SELECT Id_Reunion FROM Reunion WHERE Fecha_reunion = %s
+        SELECT Id_Reunion 
+        FROM Reunion 
+        WHERE Fecha_reunion = %s
     """, (fecha,))
     row = cursor.fetchone()
 
@@ -82,11 +69,10 @@ def pagina_asistencia():
             con.commit()
             id_reunion = cursor.lastrowid
             st.info(f"Reunión creada (ID {id_reunion}).")
-        except Exception:
-            st.error("⚠ ERROR: No se pudo crear la reunión.")
+        except:
+            st.error("⚠ ERROR: No se pudo crear la reunión. Revise Id_Grupo.")
             return
 
-    # Socias
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
 
@@ -101,6 +87,7 @@ def pagina_asistencia():
 
     for idx, (id_socia, nombre) in enumerate(socias, start=1):
         c1, c2, c3 = st.columns([1, 3, 3])
+
         c1.write(idx)
         c2.write(nombre)
 
@@ -112,8 +99,8 @@ def pagina_asistencia():
 
         asistencia_registro[id_socia] = asistencia
 
-    # Guardar
     if st.button("💾 Guardar asistencia general"):
+
         try:
             for id_socia, asistencia in asistencia_registro.items():
 
@@ -133,7 +120,6 @@ def pagina_asistencia():
                         SET Estado_asistencia = %s, Fecha = %s
                         WHERE Id_Reunion = %s AND Id_Socia = %s
                     """, (estado, fecha, id_reunion, id_socia))
-
                 else:
                     cursor.execute("""
                         INSERT INTO Asistencia (Id_Reunion, Id_Socia, Estado_asistencia, Fecha)
@@ -146,7 +132,6 @@ def pagina_asistencia():
         except Exception as e:
             st.error(f"Error al guardar asistencia: {e}")
 
-    # Mostrar tabla
     cursor.execute("""
         SELECT S.Nombre, A.Estado_asistencia
         FROM Asistencia A
@@ -167,9 +152,8 @@ def pagina_asistencia():
         st.info("Aún no hay asistencia registrada.")
 
 
-
 # ---------------------------------------------------------
-# 🟥 MULTAS (TU CÓDIGO SIN CAMBIOS)
+# 🟥 APLICACIÓN DE MULTAS
 # ---------------------------------------------------------
 def pagina_multas():
 
@@ -192,10 +176,10 @@ def pagina_multas():
     tipo_sel = st.selectbox("📌 Tipo de multa:", lista_tipos.keys())
     id_tipo_multa = lista_tipos[tipo_sel]
 
-    monto = st.number_input("💵 Monto de la multa:", min_value=0.01, step=0.50, format="%.2f")
+    monto = st.number_input("💵 Monto:", min_value=0.01, step=0.50, format="%.2f")
     fecha_raw = st.date_input("📅 Fecha de aplicación")
     fecha = fecha_raw.strftime("%Y-%m-%d")
-    estado = st.selectbox("📍 Estado del pago:", ["A pagar", "Pagada"])
+    estado = st.selectbox("📍 Estado:", ["A pagar", "Pagada"])
 
     if st.button("💾 Registrar multa"):
         try:
@@ -211,8 +195,7 @@ def pagina_multas():
 
     st.markdown("---")
 
-    # Filtros
-    st.subheader("🔎 Filtrar multas registradas")
+    st.subheader("🔎 Filtrar multas")
 
     filtro_socia = st.selectbox("Filtrar por socia:", ["Todas"] + list(lista_socias.keys()))
     filtro_estado = st.selectbox("Filtrar por estado:", ["Todos", "A pagar", "Pagada"])
@@ -250,7 +233,7 @@ def pagina_multas():
 
     if multas:
 
-        cols = st.columns([1, 3, 3, 2, 2, 2, 2])
+        cols = st.columns([1,3,3,2,2,2,2])
         cols[0].write("**ID**")
         cols[1].write("**Socia**")
         cols[2].write("**Tipo multa**")
@@ -261,7 +244,6 @@ def pagina_multas():
 
         for row in multas:
             id_multa, socia, tipo, monto, estado_actual, fecha = row
-
             col1, col2, col3, col4, col5, col6, col7 = st.columns([1,3,3,2,2,2,2])
 
             col1.write(id_multa)
@@ -285,9 +267,8 @@ def pagina_multas():
                     WHERE Id_Multa = %s
                 """, (nuevo_estado, id_multa))
                 con.commit()
-                st.success(f"Estado actualizado para la multa ID {id_multa}")
+                st.success(f"Estado actualizado.")
                 st.rerun()
 
     else:
-        st.info("No hay multas registradas con esos filtros.")
-
+        st.info("No hay multas registradas.")
