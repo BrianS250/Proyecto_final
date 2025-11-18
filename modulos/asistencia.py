@@ -5,101 +5,77 @@ from reportlab.lib import colors
 from reportlab.lib.units import mm
 from modulos.config.conexion import obtener_conexion
 
-# --------------------------------------------------------------------
-#  FUNCIÓN PARA GENERAR EL FORMULARIO DE ASISTENCIA
-# --------------------------------------------------------------------
 
-def generar_pdf_asistencia(socias):
-    filename = "formulario_asistencia.pdf"
-    c = canvas.Canvas(filename, pagesize=letter)
+# ================================
+#   INTERFAZ PRINCIPAL DE ASISTENCIA
+# ================================
+def interfaz_asistencia():
+    st.header("📋 Formulario de Asistencia")
 
-    # Tamaño de página
-    width, height = letter
+    st.write("Generar formulario de asistencia para las reuniones del grupo.")
+
+    # Datos requeridos
+    fecha_reunion = st.date_input("Fecha de la reunión")
+    modalidad = st.selectbox("Modalidad (M/H):", ["M", "H"])
+
+    st.info("El formulario generará únicamente **10 filas** como solicitaste.")
+
+    if st.button("📄 Generar formulario PDF"):
+        generar_pdf_asistencia(str(fecha_reunion), modalidad)
+        st.success("Formulario generado correctamente. Descárguelo abajo.")
+
+        with open("formulario_asistencia.pdf", "rb") as f:
+            st.download_button(
+                "⬇️ Descargar formulario",
+                f,
+                file_name="formulario_asistencia.pdf"
+            )
+
+
+# ================================
+#   FUNCIÓN PARA GENERAR EL PDF
+# ================================
+def generar_pdf_asistencia(fecha, modalidad):
+    archivo = "formulario_asistencia.pdf"
+    c = canvas.Canvas(archivo, pagesize=letter)
 
     # Título
-    c.setFont("Helvetica-Bold", 14)
-    c.drawCentredString(width / 2, height - 40, "FORMULARIO DE ASISTENCIA")
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(180, 760, "FORMULARIO DE ASISTENCIA")
 
-    # Configuración de tabla
-    x_start = 20
-    y_start = height - 100
-    row_height = 18
-    col_num = 12  # # | Socia | M/H | 10 fechas
-    col_widths = [
-        20,   # #
-        200,  # Nombre
-        25,   # M/H
-    ] + [45] * 10  # 10 fechas vacías
+    # Encabezado
+    c.setFont("Helvetica", 11)
+    c.drawString(50, 735, "Fecha:")
+    c.drawString(100, 735, fecha)
 
-    # Encabezados
-    headers = ["#", "Socia", "M/H"] + [f"Fecha" for _ in range(10)]
+    c.drawString(300, 735, "M/H:")
+    c.drawString(340, 735, modalidad)
 
-    # Dibujar encabezados
-    y = y_start
-    x = x_start
-    c.setFont("Helvetica-Bold", 8)
+    # Cabecera de tabla
+    y = 710
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(50, y, "#")
+    c.drawString(80, y, "Socia")
+    c.drawString(250, y, "M/H")
 
-    for i, h in enumerate(headers):
-        c.rect(x, y, col_widths[i], row_height)
-        c.drawCentredString(x + col_widths[i] / 2, y + 5, h)
-        x += col_widths[i]
+    # 10 columnas de fechas
+    x_date = 310
+    for i in range(10):
+        c.drawString(x_date + i * 50, y, f"Fecha {i + 1}")
 
-    # Filas con socias
-    c.setFont("Helvetica", 8)
-    y -= row_height
+    # Filas (solo 10)
+    c.setFont("Helvetica", 9)
+    y -= 20
 
-    for idx, socia in enumerate(socias, start=1):
-        x = x_start
+    for i in range(1, 11):
+        c.drawString(50, y, str(i))         # número
+        c.drawString(80, y, "")             # nombre socia
+        c.drawString(250, y, modalidad)     # M/H
 
-        row = [
-            str(idx),           # Número
-            socia["Nombre"],    # Nombre socia
-            " "                 # M/H vacío
-        ] + [""] * 10           # 10 fechas vacías
+        # Casillas de asistencia
+        for j in range(10):
+            c.rect(310 + j*50, y - 5, 40, 17)
 
-        for i, value in enumerate(row):
-            c.rect(x, y, col_widths[i], row_height)
-
-            # Alinear texto
-            if i == 1:  # Nombre a la izquierda
-                c.drawString(x + 2, y + 4, value)
-            else:
-                c.drawCentredString(x + col_widths[i] / 2, y + 4, value)
-
-            x += col_widths[i]
-
-        y -= row_height
+        y -= 25
 
     c.save()
-    return filename
-
-
-# --------------------------------------------------------------------
-#  INTERFAZ STREAMLIT
-# --------------------------------------------------------------------
-
-def pagina_asistencia():
-    st.title("📋 Registro de asistencia")
-
-    try:
-        con = obtener_conexion()
-        cursor = con.cursor(dictionary=True)
-        cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Nombre")
-        socias = cursor.fetchall()
-    except Exception as e:
-        st.error(f"Error cargando socias: {e}")
-        return
-
-    st.success("Socias cargadas correctamente.")
-
-    if st.button("📄 Generar formulario de asistencia (PDF)"):
-        filename = generar_pdf_asistencia(socias)
-
-        with open(filename, "rb") as f:
-            st.download_button(
-                label="⬇ Descargar formulario",
-                data=f,
-                file_name=filename,
-                mime="application/pdf"
-            )
-        st.success("Formulario generado correctamente.")
