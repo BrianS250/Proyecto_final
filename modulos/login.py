@@ -1,15 +1,12 @@
 import streamlit as st
 from modulos.conexion import obtener_conexion
+from modulos.directiva import interfaz_directiva
 
 
 def login():
 
-    # Si ya está logueado, no pedir login
-    if "sesion_iniciada" in st.session_state and st.session_state["sesion_iniciada"]:
-        return
-
     st.title("🔐 Inicio de Sesión")
-    st.write("Ingrese sus credenciales para acceder al Sistema de Gestión de Grupos.")
+    st.write("Ingrese sus credenciales para acceder al sistema.")
 
     usuario = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
@@ -19,26 +16,25 @@ def login():
         con = obtener_conexion()
         cursor = con.cursor()
 
-        # ---- CONSULTA VALIDADA ----
-        cursor.execute("""
-            SELECT Usuario, Rol 
-            FROM Usuarios
-            WHERE Usuario = %s AND Contrasena = %s
-        """, (usuario, password))
+        try:
+            cursor.execute("""
+                SELECT Usuario, Rol 
+                FROM Empleado 
+                WHERE Usuario = %s AND Contra = %s
+            """, (usuario, password))
 
-        datos = cursor.fetchone()
+            datos = cursor.fetchone()
 
-        if datos:
-            usuario_db, rol_db = datos
+            if datos:
+                # Guardamos usuario y rol en sesión
+                st.session_state["usuario"] = datos[0]
+                st.session_state["rol"] = datos[1]
+                st.session_state["sesion_iniciada"] = True
+                st.success("Inicio de sesión exitoso.")
+                st.rerun()
 
-            # ----- GUARDAR SESIÓN -----
-            st.session_state["usuario"] = usuario_db
-            st.session_state["rol"] = rol_db.lower()
-            st.session_state["sesion_iniciada"] = True
+            else:
+                st.error("❌ Credenciales incorrectas.")
 
-            st.success("Inicio de sesión exitoso.")
-            st.rerun()  # 🔥 Aquí ya entra a la app
-
-        else:
-            st.error("❌ Usuario o contraseña incorrectos.")
-
+        except Exception as e:
+            st.error(f"Error en login: {e}")
