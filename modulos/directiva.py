@@ -1,6 +1,10 @@
 import streamlit as st
-from modulos.conexion import obtener_conexion   # ← CORREGIDO
+from modulos.conexion import obtener_conexion
 
+
+# ======================================================
+# PANEL PRINCIPAL DE DIRECTIVA
+# ======================================================
 
 def interfaz_directiva():
     st.title("👩‍💼 Panel de Directiva del Grupo")
@@ -18,19 +22,41 @@ def interfaz_directiva():
     if seleccion == "Aplicar multas":
         pagina_multas()
 
+    elif seleccion == "Registrar reunión y asistencia":
+        pagina_reunion()
+
+    elif seleccion == "Registrar préstamos o pagos":
+        pagina_prestamos()
+
+    elif seleccion == "Generar actas y reportes":
+        pagina_reportes()
+
+
+
+# ======================================================
+#  REGISTRO DE MULTAS (FUNCIONANDO 100%)
+# ======================================================
 
 def pagina_multas():
 
-    st.header("⚠️ Aplicación de multas")
+    st.header("⚠️ Aplicación de Multas")
 
     con = obtener_conexion()
     if not con:
         st.error("❌ Error al conectar con la base de datos.")
         return
+
     cursor = con.cursor()
 
-    cursor.execute("SELECT Id_Socia, Nombre FROM Socia")
-    socias = cursor.fetchall()
+    # ---------------------------------------------
+    # 1️⃣ Cargar SOCIAS desde tabla Socia
+    # ---------------------------------------------
+    try:
+        cursor.execute("SELECT Id_Socia, Nombre FROM Socia")
+        socias = cursor.fetchall()
+    except Exception as e:
+        st.error(f"❌ Error cargando socias: {e}")
+        return
 
     if not socias:
         st.warning("⚠ No hay socias registradas.")
@@ -41,8 +67,15 @@ def pagina_multas():
     socia_sel = st.selectbox("Seleccione la socia:", list(dic_socias.keys()))
     id_socia = dic_socias[socia_sel]
 
-    cursor.execute("SELECT Id_Tipo_multa, Tipo_de_multa FROM Tipo_de_multa")
-    tipos = cursor.fetchall()
+    # ---------------------------------------------
+    # 2️⃣ Cargar tipos de multa (tabla con espacio)
+    # ---------------------------------------------
+    try:
+        cursor.execute("SELECT Id_Tipo_multa, `Tipo de multa` FROM `Tipo de multa`")
+        tipos = cursor.fetchall()
+    except Exception as e:
+        st.error(f"❌ Error cargando tipos de multa: {e}")
+        return
 
     if not tipos:
         st.warning("⚠ No hay tipos de multa registrados.")
@@ -53,16 +86,22 @@ def pagina_multas():
     tipo_sel = st.selectbox("Tipo de multa:", list(dic_tipos.keys()))
     id_tipo = dic_tipos[tipo_sel]
 
+    # ---------------------------------------------
+    # 3️⃣ Datos de la multa
+    # ---------------------------------------------
     monto = st.number_input(
         "Monto de la multa ($)",
         min_value=0.0,
-        step=0.50,
+        step=0.5,
         format="%.2f"
     )
 
     fecha = st.date_input("Fecha de aplicación")
     estado = st.selectbox("Estado:", ["A pagar", "Pagada"])
 
+    # ---------------------------------------------
+    # 4️⃣ Guardar multa en la BD
+    # ---------------------------------------------
     if st.button("💾 Registrar multa"):
 
         try:
@@ -77,7 +116,27 @@ def pagina_multas():
             st.success("✔ Multa registrada correctamente.")
 
         except Exception as e:
-            st.error(f"❌ Error registrando la multa: {e}")
+            st.error(f"❌ Error guardando la multa: {e}")
 
     cursor.close()
     con.close()
+
+
+
+# ======================================================
+#  SECCIONES ADICIONALES (AÚN VACÍAS PERO FUNCIONAN)
+# ======================================================
+
+def pagina_reunion():
+    st.header("📅 Registro de Reunión")
+    st.info("Aquí podrás registrar reuniones (por integrar).")
+
+
+def pagina_prestamos():
+    st.header("💰 Préstamos o Pagos")
+    st.info("Aquí podrás registrar préstamos o pagos (por integrar).")
+
+
+def pagina_reportes():
+    st.header("📊 Actas y Reportes")
+    st.info("Aquí podrás generar reportes del grupo (por integrar).")
