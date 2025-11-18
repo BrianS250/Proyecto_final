@@ -1,5 +1,5 @@
 import streamlit as st
-from modulos.config.conexion import obtener_conexion
+from modulos.Configuracion.conexion import obtener_conexion
 import pandas as pd
 from datetime import date
 
