@@ -28,7 +28,7 @@ def interfaz_directiva():
 
 
 # ---------------------------------------------------------
-# 🟩 REGISTRO DE ASISTENCIA (CORREGIDO PARA PERMITIR FECHAS PASADAS)
+# 🟩 REGISTRO DE ASISTENCIA (CORREGIDO 100%)
 # ---------------------------------------------------------
 def pagina_asistencia():
 
@@ -41,21 +41,21 @@ def pagina_asistencia():
 
     cursor = con.cursor()
 
-    # Fecha siempre convertida a string
+    # Convertir fecha a formato seguro
     fecha_raw = st.date_input("📅 Fecha de reunión", value=date.today())
     fecha = fecha_raw.strftime("%Y-%m-%d")
 
     # ---------------------------------------------------------
-    # 1️⃣ REVISAR SI LA REUNIÓN YA EXISTE
+    # 1️⃣ Crear o recuperar reunión por fecha
     # ---------------------------------------------------------
     try:
         cursor.execute("SELECT Id_Reunion FROM Reunion WHERE Fecha_reunion = %s", (fecha,))
         row = cursor.fetchone()
 
         if row:
-            id_reunion = row[0]   # Usar reunión existente (para días pasados)
+            id_reunion = row[0]  # Reunión existente
         else:
-            # Crear nueva reunión SIN Id_Grupo
+            # Crear reunión nueva SIN Id_Grupo
             cursor.execute("""
                 INSERT INTO Reunion (Fecha_reunion, observaciones, acuerdos, Tema_central, Id_Grupo)
                 VALUES (%s, '', '', '', NULL)
@@ -78,15 +78,15 @@ def pagina_asistencia():
 
     asistencia_registro = {}
 
-    # Cabecera estilo tabla
+    # Cabecera tipo tabla
     col1, col2, col3 = st.columns([1, 3, 3])
     col1.write("**#**")
     col2.write("**Socia**")
-    col3.write("**Asistencia (SI / NO)**")
+    col3.write("**Asistencia**")
 
     total_presentes = 0
 
-    # Fila por socia
+    # Generar filas
     for idx, (id_socia, nombre) in enumerate(socias, start=1):
 
         c1, c2, c3 = st.columns([1, 3, 3])
@@ -101,13 +101,14 @@ def pagina_asistencia():
         )
 
         asistencia_registro[id_socia] = asistencia
+
         if asistencia == "SI":
             total_presentes += 1
 
     st.success(f"👥 Total presentes: {total_presentes}")
 
     # ---------------------------------------------------------
-    # 3️⃣ GUARDAR ASISTENCIA
+    # 3️⃣ GUARDAR ASISTENCIA (CORREGIDO CON GÉNERO)
     # ---------------------------------------------------------
     if st.button("💾 Guardar asistencia general"):
 
@@ -116,7 +117,11 @@ def pagina_asistencia():
 
                 estado = "Presente" if asistencia == "SI" else "Ausente"
 
-                # Verificar si ya existe asistencia
+                # ← Obtener género desde tabla Socia
+                cursor.execute("SELECT Sexo FROM Socia WHERE Id_Socia = %s", (id_socia,))
+                genero = cursor.fetchone()[0]
+
+                # ¿Ya existe registro?
                 cursor.execute("""
                     SELECT Id_Asistencia 
                     FROM Asistencia 
@@ -128,14 +133,15 @@ def pagina_asistencia():
                 if ya_existe:
                     cursor.execute("""
                         UPDATE Asistencia
-                        SET Estado_asistencia = %s, Fecha = %s
+                        SET Estado_asistencia = %s, Genero = %s, Fecha = %s
                         WHERE Id_Reunion = %s AND Id_Socia = %s
-                    """, (estado, fecha, id_reunion, id_socia))
+                    """, (estado, genero, fecha, id_reunion, id_socia))
+
                 else:
                     cursor.execute("""
-                        INSERT INTO Asistencia (Id_Reunion, Id_Socia, Estado_asistencia, Fecha)
-                        VALUES (%s, %s, %s, %s)
-                    """, (id_reunion, id_socia, estado, fecha))
+                        INSERT INTO Asistencia (Id_Reunion, Id_Socia, Estado_asistencia, Genero, Fecha)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (id_reunion, id_socia, estado, genero, fecha))
 
             con.commit()
             st.success("✔ Asistencia guardada correctamente.")
@@ -144,10 +150,10 @@ def pagina_asistencia():
             st.error(f"❌ Error al guardar asistencia: {e}")
 
     # ---------------------------------------------------------
-    # 4️⃣ MOSTRAR TABLA DE ASISTENCIAS REGISTRADAS
+    # 4️⃣ MOSTRAR ASISTENCIA REGISTRADA
     # ---------------------------------------------------------
     cursor.execute("""
-        SELECT S.Nombre, A.Estado_asistencia
+        SELECT S.Nombre, A.Estado_asistencia, A.Genero
         FROM Asistencia A
         JOIN Socia S ON S.Id_Socia = A.Id_Socia
         WHERE A.Id_Reunion = %s
@@ -156,18 +162,19 @@ def pagina_asistencia():
     registros = cursor.fetchall()
 
     if registros:
-        df = pd.DataFrame(registros, columns=["Socia", "Asistencia"])
+        df = pd.DataFrame(registros, columns=["Socia", "Asistencia", "Genero"])
         st.subheader("📋 Registro actual")
         st.dataframe(df)
 
         total_presentes = df[df["Asistencia"] == "Presente"].shape[0]
         st.success(f"👥 Total presentes: {total_presentes}")
+
     else:
         st.info("Aún no hay asistencia registrada.")
 
 
 # ---------------------------------------------------------
-# 🟥 APLICACIÓN DE MULTAS  
+# 🟥 APLICACIÓN DE MULTAS (NO MODIFICADO)
 # ---------------------------------------------------------
 def pagina_multas():
 
@@ -190,9 +197,11 @@ def pagina_multas():
     tipo_sel = st.selectbox("📌 Tipo de multa:", lista_tipos.keys())
     id_tipo_multa = lista_tipos[tipo_sel]
 
-    monto = st.number_input("💵 Monto de la multa:", min_value=0.01, step=0.50, format="%.2f")
+    monto = st.number_input("💵 Monto:", min_value=0.01, step=0.50, format="%.2f")
+
     fecha_raw = st.date_input("📅 Fecha de aplicación")
     fecha = fecha_raw.strftime("%Y-%m-%d")
+
     estado = st.selectbox("📍 Estado del pago:", ["A pagar", "Pagada"])
 
     if st.button("💾 Registrar multa"):
