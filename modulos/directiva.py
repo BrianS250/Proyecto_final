@@ -3,174 +3,176 @@ import pandas as pd
 from modulos.conexion import obtener_conexion
 
 
-# ============================================================
-# 🔐 BOTÓN DE CERRAR SESIÓN
-# ============================================================
-def cerrar_sesion():
-    st.sidebar.title("Menú")
+# =============================================================================
+#                           PANEL PRINCIPAL DE DIRECTIVA
+# =============================================================================
+def interfaz_directiva():
+    st.title("👔 Panel de la Directiva del Grupo")
+    st.write("Administre reuniones, asistencia, préstamos y multas.")
+
+    # Botón para cerrar sesión
     if st.sidebar.button("🔒 Cerrar sesión"):
         st.session_state["sesion_iniciada"] = False
         st.rerun()
 
+    # Menú de opciones
+    st.subheader("📌 Seleccione una opción:")
+    opcion = st.selectbox(
+        "",
+        ["Registro de asistencia", "Aplicar multas"]
+    )
 
-# ============================================================
-# 🟦 PÁGINA DE ASISTENCIA
-# ============================================================
+    if opcion == "Registro de asistencia":
+        pagina_asistencia()
+
+    elif opcion == "Aplicar multas":
+        pagina_multas()
+
+
+# =============================================================================
+#                                ASISTENCIA
+# =============================================================================
 def pagina_asistencia():
 
-    st.subheader("📝 Registro de asistencia del grupo")
+    st.header("📝 Registro de asistencia del grupo")
 
     con = obtener_conexion()
     if not con:
         st.error("❌ No se pudo conectar a la base de datos.")
         return
+
     cursor = con.cursor()
 
-    # 1) Seleccionar fecha
+    # FECHA
     fecha = st.date_input("📅 Fecha de la reunión")
 
-    # 2) Ver si ya existe reunión
+    # Verificar si ya existe reunión
     cursor.execute("SELECT Id_Reunion FROM Reunion WHERE Fecha_reunion = %s", (fecha,))
     reunion = cursor.fetchone()
 
     if reunion:
         id_reunion = reunion[0]
     else:
-        cursor.execute("""
-            INSERT INTO Reunion (Fecha_reunion, observaciones, acuerdos, Tema_central, Id_Grupo)
-            VALUES (%s,'','','','1')
-        """, (fecha,))
+        cursor.execute(
+            "INSERT INTO Reunion (Fecha_reunion, observaciones, acuerdos, Tema_central, Id_Grupo) "
+            "VALUES (%s,'','','','1')",
+            (fecha,)
+        )
         con.commit()
         id_reunion = cursor.lastrowid
-        st.info(f"📌 Nueva reunión creada (ID {id_reunion})")
+        st.info(f"📌 Nueva reunión creada automáticamente con ID: {id_reunion}")
 
-    # 3) Cargar socias
+    # SOCIAS
     cursor.execute("SELECT Id_Socia, Nombre, Sexo FROM Socia")
-    datos = cursor.fetchall()
-    socias = {fila[1]: fila for fila in datos}
+    socias = cursor.fetchall()
 
-    socia_sel = st.selectbox("👩 Seleccione la socia:", list(socias.keys()))
-    id_socia = socias[socia_sel][0]
-    genero = socias[socia_sel][2]
+    lista_socias = {s[1]: (s[0], s[2]) for s in socias}
+
+    socia_sel = st.selectbox("👩 Seleccione la socia:", lista_socias.keys())
+
+    id_socia = lista_socias[socia_sel][0]
+    genero = lista_socias[socia_sel][1]
 
     st.text_input("Género:", genero, disabled=True)
 
-    # 4) Estado
+    # ESTADO ASISTENCIA
     estado = st.selectbox("📍 Estado asistencia:", ["Presente", "Ausente"])
 
-    # 5) Guardar asistencia
+    # GUARDAR
     if st.button("💾 Guardar asistencia"):
         try:
             cursor.execute("""
                 INSERT INTO Asistencia (Id_Reunion, Id_Socia, Estado_asistencia, Genero, Fecha)
                 VALUES (%s, %s, %s, %s, %s)
             """, (id_reunion, id_socia, estado, genero, fecha))
-
             con.commit()
-            st.success("✅ Asistencia guardada")
+            st.success("✅ Asistencia registrada correctamente.")
+            st.rerun()
         except Exception as e:
-            st.error(f"⚠ Error: {e}")
+            st.error(f"⚠ Error al guardar asistencia: {e}")
 
-    # 6) Mostrar tabla
+    # MOSTRAR ASISTENCIA
     st.subheader("📋 Asistencias registradas")
-
     cursor.execute("""
         SELECT A.Id_Asistencia, S.Nombre, A.Genero, A.Estado_asistencia, A.Fecha
         FROM Asistencia A
         JOIN Socia S ON S.Id_Socia = A.Id_Socia
         WHERE A.Id_Reunion = %s
     """, (id_reunion,))
+
     registros = cursor.fetchall()
 
     if registros:
         df = pd.DataFrame(registros, columns=["ID", "Socia", "Género", "Estado", "Fecha"])
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df)
     else:
         st.info("No hay asistencias registradas aún.")
 
 
-# ============================================================
-# 🟪 PÁGINA DE MULTAS
-# ============================================================
+# =============================================================================
+#                                 MULTAS
+# =============================================================================
 def pagina_multas():
 
-    st.subheader("⚠ Aplicación de multas")
+    st.header("⚠️ Aplicación de multas")
 
     con = obtener_conexion()
     if not con:
         st.error("❌ No se pudo conectar a la base de datos.")
         return
+
     cursor = con.cursor()
 
-    # Socia
+    # SOCIAS
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia")
-    datos = cursor.fetchall()
-    socias = {s[1]: s[0] for s in datos}
+    socias = cursor.fetchall()
+    lista_socias = {s[1]: s[0] for s in socias}
 
-    socia_sel = st.selectbox("👩 Seleccione la socia:", list(socias.keys()))
-    id_socia = socias[socia_sel]
+    socia_sel = st.selectbox("👩 Seleccione la socia:", lista_socias.keys())
+    id_socia = lista_socias[socia_sel]
 
-    # Tipo de multa
-    cursor.execute("SELECT Id_Tipo_multa, Tipo_de_multa FROM Tipo_de_multa")
+    # TIPOS DE MULTA
+    cursor.execute("SELECT Id_Tipo_multa, Tipo_de_multa FROM `Tipo de multa`")
     tipos = cursor.fetchall()
     tipos_multa = {t[1]: t[0] for t in tipos}
 
-    tipo_sel = st.selectbox("📌 Tipo de multa:", list(tipos_multa.keys()))
-    id_tipo = tipos_multa[tipo_sel]
+    tipo_sel = st.selectbox("📝 Tipo de multa:", tipos_multa.keys())
+    id_tipo_multa = tipos_multa[tipo_sel]
 
+    # MONTO
+    monto = st.number_input("💵 Monto:", min_value=0.0, step=0.5)
+
+    # FECHA
     fecha = st.date_input("📅 Fecha de aplicación")
-    monto = st.number_input("💲 Monto de la multa", min_value=0.0, step=0.50)
-    estado = st.selectbox("🔖 Estado:", ["A pagar", "Pagada"])
 
-    # Guardar multa
-    if st.button("💾 Guardar multa"):
+    # GUARDAR MULTA
+    if st.button("💾 Registrar multa"):
         try:
             cursor.execute("""
                 INSERT INTO Multa (Monto, Fecha_aplicacion, Estado, Id_Tipo_multa, Id_Socia)
                 VALUES (%s, %s, %s, %s, %s)
-            """, (monto, fecha, estado, id_tipo, id_socia))
-
+            """, (monto, fecha, "A pagar", id_tipo_multa, id_socia))
             con.commit()
             st.success("✅ Multa registrada correctamente.")
+            st.rerun()
         except Exception as e:
-            st.error(f"⚠ Error: {e}")
+            st.error(f"⚠ Error al guardar la multa: {e}")
 
-    # Mostrar multas
+    # LISTADO DE MULTAS
     st.subheader("📋 Multas registradas")
 
     cursor.execute("""
         SELECT M.Id_Multa, S.Nombre, T.Tipo_de_multa, M.Monto, M.Estado, M.Fecha_aplicacion
         FROM Multa M
         JOIN Socia S ON S.Id_Socia = M.Id_Socia
-        JOIN Tipo_de_multa T ON T.Id_Tipo_multa = M.Id_Tipo_multa
+        JOIN `Tipo de multa` T ON T.Id_Tipo_multa = M.Id_Tipo_multa
         ORDER BY M.Id_Multa DESC
     """)
-    registros = cursor.fetchall()
 
-    if registros:
-        df = pd.DataFrame(registros, columns=["ID", "Socia", "Tipo", "Monto", "Estado", "Fecha"])
-        st.dataframe(df, use_container_width=True)
+    multas = cursor.fetchall()
+
+    if multas:
+        df = pd.DataFrame(multas, columns=["ID", "Socia", "Tipo", "Monto", "Estado", "Fecha"])
+        st.dataframe(df)
     else:
         st.info("No hay multas registradas aún.")
-
-
-# ============================================================
-# 🟩 PANEL PRINCIPAL — DOS SECCIONES LATERALES
-# ============================================================
-def interfaz_directiva():
-
-    cerrar_sesion()
-
-    st.title("👩‍⚖️ Panel de la Directiva del Grupo")
-    st.write("Administre reuniones, asistencia, préstamos y multas.")
-
-    menu = st.sidebar.radio(
-        "📌 Seleccione una opción:",
-        ["Registro de asistencia", "Aplicar multas"]
-    )
-
-    if menu == "Registro de asistencia":
-        pagina_asistencia()
-
-    elif menu == "Aplicar multas":
-        pagina_multas()
