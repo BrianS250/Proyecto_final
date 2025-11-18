@@ -3,29 +3,35 @@ from modulos.conexion import obtener_conexion
 
 def login():
 
-    st.title("🔐 Inicio de sesión")
+    st.title("Inicio de sesión")
 
     usuario = st.text_input("Usuario")
-    contra = st.text_input("Contraseña", type="password")
+    password = st.text_input("Contraseña", type="password")
 
     if st.button("Ingresar"):
-
         con = obtener_conexion()
         cursor = con.cursor()
 
         cursor.execute("""
-            SELECT Id_Empleado, Usuario, Rol 
-            FROM Empleado 
-            WHERE Usuario = %s AND Contra = %s
-        """, (usuario, contra))
+            SELECT Usuario, Rol 
+            FROM Usuarios 
+            WHERE Usuario = %s AND Contrasena = %s
+        """, (usuario, password))
+        
+        fila = cursor.fetchone()
 
-        row = cursor.fetchone()
+        if fila:
+            usuario_db, rol_db = fila
 
-        if row:
+            # NORMALIZAMOS EL ROL A MINÚSCULAS
+            rol_db = rol_db.strip().lower()
+
+            # Guardamos sesión
+            st.session_state["usuario"] = usuario_db
+            st.session_state["rol"] = rol_db  # <--- CRÍTICO
             st.session_state["sesion_iniciada"] = True
-            st.session_state["usuario"] = row[1]
-            st.session_state["rol"] = row[2]   # 👈 IMPORTANTE
-            st.success(f"Bienvenido, {row[1]}")
+
+            st.success("Ingreso exitoso 🎉")
             st.rerun()
         else:
-            st.error("Usuario o contraseña incorrectos.")
+            st.error("Usuario o contraseña incorrectos")
