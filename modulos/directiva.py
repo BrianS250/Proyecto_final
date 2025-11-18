@@ -28,7 +28,7 @@ def interfaz_directiva():
 
 
 # ---------------------------------------------------------
-# 🟩 REGISTRO DE ASISTENCIA (CORREGIDO + NUEVO FORMATO)
+# 🟩 REGISTRO DE ASISTENCIA (CORREGIDO PARA PERMITIR FECHAS PASADAS)
 # ---------------------------------------------------------
 def pagina_asistencia():
 
@@ -41,39 +41,35 @@ def pagina_asistencia():
 
     cursor = con.cursor()
 
-    # ---------------------------------------------------------
-    # FIX IMPORTANTE: Convertir fecha a formato STRING
-    # ---------------------------------------------------------
+    # Fecha siempre convertida a string
     fecha_raw = st.date_input("📅 Fecha de reunión", value=date.today())
-    fecha = fecha_raw.strftime("%Y-%m-%d")  # ← CRÍTICO PARA EVITAR IntegrityError
+    fecha = fecha_raw.strftime("%Y-%m-%d")
 
     # ---------------------------------------------------------
-    # Verificar si existe reunión
+    # 1️⃣ REVISAR SI LA REUNIÓN YA EXISTE
     # ---------------------------------------------------------
-    cursor.execute("""
-        SELECT Id_Reunion 
-        FROM Reunion 
-        WHERE Fecha_reunion = %s
-    """, (fecha,))
-    row = cursor.fetchone()
+    try:
+        cursor.execute("SELECT Id_Reunion FROM Reunion WHERE Fecha_reunion = %s", (fecha,))
+        row = cursor.fetchone()
 
-    if row:
-        id_reunion = row[0]
-    else:
-        try:
+        if row:
+            id_reunion = row[0]   # Usar reunión existente (para días pasados)
+        else:
+            # Crear nueva reunión SIN Id_Grupo
             cursor.execute("""
                 INSERT INTO Reunion (Fecha_reunion, observaciones, acuerdos, Tema_central, Id_Grupo)
-                VALUES (%s,'','','',1)
+                VALUES (%s, '', '', '', NULL)
             """, (fecha,))
             con.commit()
             id_reunion = cursor.lastrowid
             st.info(f"Reunión creada (ID {id_reunion}).")
-        except Exception as e:
-            st.error("⚠ ERROR: No se pudo crear la reunión. Revise que Id_Grupo exista.")
-            return
+
+    except Exception as e:
+        st.error(f"⚠ ERROR REAL: {e}")
+        return
 
     # ---------------------------------------------------------
-    # Obtener todas las socias
+    # 2️⃣ OBTENER TODAS LAS SOCIAS
     # ---------------------------------------------------------
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
@@ -82,14 +78,17 @@ def pagina_asistencia():
 
     asistencia_registro = {}
 
-    # Encabezados estilo tabla
+    # Cabecera estilo tabla
     col1, col2, col3 = st.columns([1, 3, 3])
     col1.write("**#**")
     col2.write("**Socia**")
     col3.write("**Asistencia (SI / NO)**")
 
-    # Filas dinámicas
+    total_presentes = 0
+
+    # Fila por socia
     for idx, (id_socia, nombre) in enumerate(socias, start=1):
+
         c1, c2, c3 = st.columns([1, 3, 3])
 
         c1.write(idx)
@@ -98,13 +97,17 @@ def pagina_asistencia():
         asistencia = c3.selectbox(
             "",
             ["SI", "NO"],
-            key=f"asis_{id_socia}"
+            key=f"asist_{id_socia}"
         )
 
         asistencia_registro[id_socia] = asistencia
+        if asistencia == "SI":
+            total_presentes += 1
+
+    st.success(f"👥 Total presentes: {total_presentes}")
 
     # ---------------------------------------------------------
-    # GUARDAR ASISTENCIA GENERAL
+    # 3️⃣ GUARDAR ASISTENCIA
     # ---------------------------------------------------------
     if st.button("💾 Guardar asistencia general"):
 
@@ -113,7 +116,7 @@ def pagina_asistencia():
 
                 estado = "Presente" if asistencia == "SI" else "Ausente"
 
-                # Verificar si existe registro previo
+                # Verificar si ya existe asistencia
                 cursor.execute("""
                     SELECT Id_Asistencia 
                     FROM Asistencia 
@@ -128,7 +131,6 @@ def pagina_asistencia():
                         SET Estado_asistencia = %s, Fecha = %s
                         WHERE Id_Reunion = %s AND Id_Socia = %s
                     """, (estado, fecha, id_reunion, id_socia))
-
                 else:
                     cursor.execute("""
                         INSERT INTO Asistencia (Id_Reunion, Id_Socia, Estado_asistencia, Fecha)
@@ -136,13 +138,13 @@ def pagina_asistencia():
                     """, (id_reunion, id_socia, estado, fecha))
 
             con.commit()
-            st.success("Asistencia guardada correctamente.")
+            st.success("✔ Asistencia guardada correctamente.")
 
         except Exception as e:
-            st.error(f"Error al guardar asistencia: {e}")
+            st.error(f"❌ Error al guardar asistencia: {e}")
 
     # ---------------------------------------------------------
-    # MOSTRAR RESULTADOS + TOTAL PRESENTES
+    # 4️⃣ MOSTRAR TABLA DE ASISTENCIAS REGISTRADAS
     # ---------------------------------------------------------
     cursor.execute("""
         SELECT S.Nombre, A.Estado_asistencia
@@ -160,13 +162,12 @@ def pagina_asistencia():
 
         total_presentes = df[df["Asistencia"] == "Presente"].shape[0]
         st.success(f"👥 Total presentes: {total_presentes}")
-
     else:
         st.info("Aún no hay asistencia registrada.")
 
 
 # ---------------------------------------------------------
-# 🟥 APLICACIÓN DE MULTAS  (SIN CAMBIOS)
+# 🟥 APLICACIÓN DE MULTAS  
 # ---------------------------------------------------------
 def pagina_multas():
 
@@ -288,5 +289,3 @@ def pagina_multas():
 
     else:
         st.info("No hay multas registradas con esos filtros.")
-
-
