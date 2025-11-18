@@ -23,7 +23,7 @@ def login():
         if fila:
             st.success("✅ Inicio de sesión exitoso.")
             st.session_state["sesion_iniciada"] = True
-            st.session_state["rol"] = fila["Rol"]
+            st.session_state["rol"] = fila["Rol"]     # ← IMPORTANTE
             st.session_state["usuario"] = fila["Usuario"]
             st.rerun()
         else:
