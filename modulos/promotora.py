@@ -1,23 +1,27 @@
 import streamlit as st
+import pandas as pd
+from datetime import date
+from modulos.conexion import obtener_conexion
+
+
+# ============================================================
+# 🟦 INTERFAZ PRINCIPAL — PROMOTORA
+# ============================================================
 
 def interfaz_promotora():
     st.title("👩‍💼 Panel de Promotora")
-    st.write("Supervisa tus grupos, registra nuevos y valida información financiera.")
+    st.write("Supervisa grupos, valida información y descarga reportes consolidados.")
 
     opciones = [
         "Consultar grupos",
-        "Registrar nuevo grupo",
         "Validar información financiera",
         "Reportes consolidados"
     ]
 
-    seleccion = st.sidebar.radio("Selecciona una opción:", opciones)
+    seleccion = st.sidebar.radio("Seleccione una opción:", opciones)
 
     if seleccion == "Consultar grupos":
         pagina_consultar_grupos()
-
-    elif seleccion == "Registrar nuevo grupo":
-        pagina_registrar_grupo()
 
     elif seleccion == "Validar información financiera":
         pagina_validar_finanzas()
@@ -26,29 +30,141 @@ def interfaz_promotora():
         pagina_reportes()
 
 
-# ======== PÁGINAS ========
+
+# ============================================================
+# 📌 CONSULTAR GRUPOS ASIGNADOS
+# ============================================================
 
 def pagina_consultar_grupos():
     st.header("📋 Grupos Asignados")
-    st.info("Grupo Mujeres Unidas")
-    st.info("Grupo Esperanza")
+
+    try:
+        con = obtener_conexion()
+        cursor = con.cursor()
+
+        cursor.execute("""
+            SELECT id_grupo, nombre_grupo, fecha_inicio, periodicidad 
+            FROM grupos
+            WHERE promotora_asignada = %s
+        """, (st.session_state["usuario"],))
+
+        datos = cursor.fetchall()
+
+        if not datos:
+            st.warning("No tiene grupos asignados.")
+            return
+
+        df = pd.DataFrame(datos, columns=["ID", "Grupo", "Inicio", "Periodicidad"])
+        st.dataframe(df, use_container_width=True)
+
+    except Exception as e:
+        st.error(f"Error al obtener los grupos: {e}")
 
 
-def pagina_registrar_grupo():
-    st.header("📝 Registrar nuevo grupo")
-    nombre = st.text_input("Nombre del grupo")
-    inicio = st.date_input("Fecha de inicio")
-    tasa = st.number_input("Tasa de interés (%)", min_value=0.0, step=0.1)
-    periodicidad = st.selectbox("Periodicidad de reuniones", ["Semanal", "Quincenal", "Mensual"])
-    if st.button("Registrar grupo"):
-        st.success("Grupo registrado correctamente.")
 
+# ============================================================
+# 📌 VALIDACIÓN DE INFORMACIÓN FINANCIERA
+# ============================================================
 
 def pagina_validar_finanzas():
-    st.header("💵 Validar información financiera")
-    st.success("Aquí podrás revisar préstamos, pagos y movimientos.")
+    st.header("💵 Validar Información Financiera")
 
+    try:
+        con = obtener_conexion()
+        cursor = con.cursor()
+
+        cursor.execute("""
+            SELECT 
+                p.id_prestamo,
+                g.nombre_grupo,
+                m.nombre,
+                p.monto,
+                p.interes,
+                p.saldo,
+                p.estado
+            FROM prestamos p
+            INNER JOIN miembros m ON p.id_miembro = m.id_miembro
+            INNER JOIN grupos g ON m.id_grupo = g.id_grupo;
+        """)
+
+        prestamos = cursor.fetchall()
+
+        if not prestamos:
+            st.info("No hay préstamos registrados.")
+            return
+
+        df = pd.DataFrame(prestamos, columns=[
+            "ID", "Grupo", "Miembro", "Monto", "Interés", "Saldo", "Estado"
+        ])
+        st.dataframe(df, use_container_width=True)
+
+        st.subheader("✔ Validación")
+        id_sel = st.number_input("ID de préstamo a validar", min_value=1, step=1)
+        decision = st.selectbox("Estado de validación", ["Aprobado", "Rechazado"])
+
+        if st.button("Guardar validación"):
+            try:
+                cursor.execute("""
+                    UPDATE prestamos
+                    SET estado_validacion = %s
+                    WHERE id_prestamo = %s
+                """, (decision, id_sel))
+                con.commit()
+                st.success("Validación registrada correctamente.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error al validar: {e}")
+
+    except Exception as e:
+        st.error(f"Error al obtener información financiera: {e}")
+
+
+
+# ============================================================
+# 📌 REPORTES CONSOLIDADOS
+# ============================================================
 
 def pagina_reportes():
-    st.header("📊 Reportes consolidados")
-    st.info("Generación de reportes financieros generales.")
+    st.header("📊 Reportes Consolidados del Distrito")
+
+    try:
+        con = obtener_conexion()
+        cursor = con.cursor()
+
+        cursor.execute("""
+            SELECT
+                g.nombre_grupo,
+                COUNT(m.id_miembro) AS miembros,
+                SUM(a.monto) AS ahorro_total,
+                SUM(p.saldo) AS prestamos_pendientes
+            FROM grupos g
+            LEFT JOIN miembros m ON g.id_grupo = m.id_grupo
+            LEFT JOIN ahorros a ON g.id_grupo = a.id_grupo
+            LEFT JOIN prestamos p ON g.id_grupo = p.id_grupo
+            GROUP BY g.id_grupo;
+        """)
+
+        reporte = cursor.fetchall()
+
+        if not reporte:
+            st.warning("No hay datos para generar reporte.")
+            return
+
+        df = pd.DataFrame(reporte, columns=[
+            "Grupo", "Miembros", "Ahorro Total", "Préstamos Pendientes"
+        ])
+
+        st.dataframe(df, use_container_width=True)
+
+        # Descarga Excel
+        st.subheader("⬇ Descargar reporte")
+        excel = df.to_excel("reporte_distrito.xlsx", index=False)
+        with open("reporte_distrito.xlsx", "rb") as f:
+            st.download_button(
+                "Descargar Excel",
+                f,
+                file_name="Reporte_Consolidado.xlsx"
+            )
+
+    except Exception as e:
+        st.error(f"Error al generar reportes: {e}")
