@@ -1,9 +1,6 @@
 import streamlit as st
-from modulos.config.conexion import obtener_conexion
+from modulos.conexion import obtener_conexion   # ← CORREGIDO
 
-# ======================================================
-# PANEL DIRECTIVA
-# ======================================================
 
 def interfaz_directiva():
     st.title("👩‍💼 Panel de Directiva del Grupo")
@@ -22,10 +19,6 @@ def interfaz_directiva():
         pagina_multas()
 
 
-# ======================================================
-#       🔶 PAGINA DE MULTAS (VERSIÓN FINAL)
-# ======================================================
-
 def pagina_multas():
 
     st.header("⚠️ Aplicación de multas")
@@ -36,9 +29,6 @@ def pagina_multas():
         return
     cursor = con.cursor()
 
-    # ---------------------------------------------------
-    # 1️⃣ Cargar SOCIAS desde tabla `Socia`
-    # ---------------------------------------------------
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia")
     socias = cursor.fetchall()
 
@@ -51,10 +41,6 @@ def pagina_multas():
     socia_sel = st.selectbox("Seleccione la socia:", list(dic_socias.keys()))
     id_socia = dic_socias[socia_sel]
 
-
-    # ---------------------------------------------------
-    # 2️⃣ Cargar tipos de multa desde `Tipo_de_multa`
-    # ---------------------------------------------------
     cursor.execute("SELECT Id_Tipo_multa, Tipo_de_multa FROM Tipo_de_multa")
     tipos = cursor.fetchall()
 
@@ -67,10 +53,6 @@ def pagina_multas():
     tipo_sel = st.selectbox("Tipo de multa:", list(dic_tipos.keys()))
     id_tipo = dic_tipos[tipo_sel]
 
-
-    # ---------------------------------------------------
-    # 3️⃣ Datos de la multa
-    # ---------------------------------------------------
     monto = st.number_input(
         "Monto de la multa ($)",
         min_value=0.0,
@@ -79,13 +61,8 @@ def pagina_multas():
     )
 
     fecha = st.date_input("Fecha de aplicación")
-
     estado = st.selectbox("Estado:", ["A pagar", "Pagada"])
 
-
-    # ---------------------------------------------------
-    # 4️⃣ Registrar multa
-    # ---------------------------------------------------
     if st.button("💾 Registrar multa"):
 
         try:
