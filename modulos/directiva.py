@@ -19,7 +19,7 @@ def interfaz_directiva():
     st.subheader("📌 Seleccione una opción:")
     opcion = st.selectbox(
         "",
-        ["Registro de asistencia", "Aplicar multas"]
+        ["Registro de asistencia", "Aplicar multas"]  # <<<<<<<< CORREGIDO
     )
 
     if opcion == "Registro de asistencia":
@@ -131,8 +131,8 @@ def pagina_multas():
     socia_sel = st.selectbox("👩 Seleccione la socia:", lista_socias.keys())
     id_socia = lista_socias[socia_sel]
 
-    # TIPOS DE MULTA
-    cursor.execute("SELECT Id_Tipo_multa, Tipo_de_multa FROM `Tipo de multa`")
+    # TIPOS DE MULTA (CORREGIDO)
+    cursor.execute("SELECT Id_Tipo_multa, Tipo_de_multa FROM Tipo_multa")
     tipos = cursor.fetchall()
     tipos_multa = {t[1]: t[0] for t in tipos}
 
@@ -165,7 +165,7 @@ def pagina_multas():
         SELECT M.Id_Multa, S.Nombre, T.Tipo_de_multa, M.Monto, M.Estado, M.Fecha_aplicacion
         FROM Multa M
         JOIN Socia S ON S.Id_Socia = M.Id_Socia
-        JOIN `Tipo de multa` T ON T.Id_Tipo_multa = M.Id_Tipo_multa
+        JOIN Tipo_multa T ON T.Id_Tipo_multa = M.Id_Tipo_multa
         ORDER BY M.Id_Multa DESC
     """)
 
