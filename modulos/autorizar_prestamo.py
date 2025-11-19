@@ -1,12 +1,13 @@
 import streamlit as st
+import pandas as pd
 from datetime import date
-from modulos.conexion import obtener_conexion
+from modulos.config.conexion import obtener_conexion
+
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
 
 
-
-# ---------------------------------------------------------
-# 🟦 AUTORIZAR PRÉSTAMO
-# ---------------------------------------------------------
 def autorizar_prestamo():
 
     st.title("💳 Autorizar préstamo")
@@ -15,101 +16,153 @@ def autorizar_prestamo():
     con = obtener_conexion()
     cursor = con.cursor()
 
-    # ---------------------------------------------------------
-    # 🔹 SELECCIÓN DE SOCIA (MEJORADO: muestra nombre)
-    # ---------------------------------------------------------
+    # ======================================================
+    # OBTENER SOCIAS
+    # ======================================================
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
 
-    opciones = {f"{id_socia} - {nombre}": id_socia for id_socia, nombre in socias}
+    if not socias:
+        st.warning("⚠ No hay socias registradas.")
+        return
 
-    socia_seleccion = st.selectbox("👩Seleccione la socia:", list(opciones.keys()))
-    id_socia = opciones[socia_seleccion]
+    lista_socias = {f"{id} - {nombre}": id for (id, nombre) in socias}
 
-    cursor.execute("SELECT Nombre FROM Socia WHERE Id_Socia = %s", (id_socia,))
-    nombre_socia = cursor.fetchone()[0]
+    # ======================================================
+    # FORMULARIO
+    # ======================================================
+    with st.form("form_prestamo"):
 
-    st.success(f"📌 Socia seleccionada: **{nombre_socia}** (ID: {id_socia})")
+        fecha_prestamo = st.date_input("📅 Fecha del préstamo", date.today())
 
-    st.write("---")
+        socia_seleccionada = st.selectbox("👩 Socia que recibe el préstamo", list(lista_socias.keys()))
+        id_socia = lista_socias[socia_seleccionada]
 
-    # ---------------------------------------------------------
-    # 🔹 CAMPOS DEL PRÉSTAMO
-    # ---------------------------------------------------------
-    monto = st.number_input("🟢 Monto prestado ($):", min_value=1, step=1)
+        monto = st.number_input("💵 Monto prestado ($):", min_value=1, step=1)
+        tasa_interes = st.number_input("📈 Tasa de interés (%):", min_value=1, step=1)
+        plazo = st.number_input("🗓 Plazo (meses):", min_value=1)
+        cuotas = st.number_input("📑 Número de cuotas:", min_value=1)
 
-    tasa_interes = st.number_input("📉 Tasa de interés (%):", min_value=1, step=1)
+        firma = st.text_input("✍️ Firma del directivo que autoriza")
 
-    plazo_meses = st.number_input("🗓 Plazo (meses)", min_value=1, step=1)
+        enviar = st.form_submit_button("✅ Autorizar préstamo")
 
-    cuotas = st.number_input("📦 Número de cuotas", min_value=1, step=1)
 
-    firma = st.text_input("✍️ Firma del directivo que autoriza")
+    # ======================================================
+    # PROCESAR FORMULARIO
+    # ======================================================
+    if enviar:
 
-    fecha_prestamo = date.today().strftime("%Y-%m-%d")
+        # Obtener caja actual
+        cursor.execute("SELECT Id_Caja, Saldo_actual FROM Caja ORDER BY Id_Caja DESC LIMIT 1")
+        caja = cursor.fetchone()
 
-    st.write("---")
+        if not caja:
+            st.error("❌ No existe caja activa.")
+            return
 
-    # ---------------------------------------------------------
-    # BOTÓN PARA AUTORIZAR PRÉSTAMO
-    # ---------------------------------------------------------
-    if st.button("✅ Autorizar préstamo"):
+        id_caja, saldo_actual = caja
+
+        if monto > saldo_actual:
+            st.error(f"❌ Fondos insuficientes. Saldo disponible: ${saldo_actual}")
+            return
+
+        saldo_pendiente = monto
 
         try:
-            cursor.execute("SELECT Saldo_actual FROM Caja ORDER BY Id_Caja DESC LIMIT 1")
-            caja = cursor.fetchone()
+            # --------------------------------------------------
+            # 1. REGISTRAR PRÉSTAMO
+            # --------------------------------------------------
+            cursor.execute("""
+                INSERT INTO Prestamo(
+                    `Fecha del préstamo`, `Monto prestado`, `Tasa de interes`,
+                    `Plazo`, `Cuotas`, `Saldo pendiente`, `Estado del préstamo`,
+                    Id_Grupo, Id_Socia, Id_Caja
+                )
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,
+            (
+                fecha_prestamo,
+                monto,
+                tasa_interes,
+                plazo,
+                cuotas,
+                saldo_pendiente,
+                "activo",
+                1,
+                id_socia,
+                id_caja
+            ))
 
-            if not caja:
-                st.error("⚠ No existe una caja registrada.")
-                return
-
-            saldo_actual = caja[0]
-
-            if monto > saldo_actual:
-                st.error("❌ El monto solicitado es mayor al saldo disponible en caja.")
-                return
-
-            cursor.execute(
-                """INSERT INTO Prestamo
-                (`Fecha del préstamo`, `Monto prestado`, `Tasa de interes`, Plazo, Cuotas,
-                `Saldo pendiente`, `Estado del préstamo`, Id_Grupo, Id_Socia, Id_Caja)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 1, %s,
-                (SELECT Id_Caja FROM Caja ORDER BY Id_Caja DESC LIMIT 1))""",
-                (fecha_prestamo, monto, tasa_interes, plazo_meses, cuotas,
-                 monto, "activo", id_socia)
-            )
+            # --------------------------------------------------
+            # 2. REGISTRAR EGRESO EN CAJA (CORREGIDO)
+            # --------------------------------------------------
+            cursor.execute("""
+                INSERT INTO Caja(Concepto, Monto, Saldo_actual, Id_Grupo, Id_Tipo_movimiento, Fecha)
+                VALUES (%s, %s, %s, %s, %s, CURRENT_DATE())
+            """,
+            (
+                f"Préstamo otorgado a: {socia_seleccionada}",
+                -monto,
+                saldo_actual - monto,
+                1,
+                3
+            ))
 
             con.commit()
 
-            # ---------------------------------------------------------
+            # ======================================================
             # CÁLCULOS DEL PRÉSTAMO
-            # ---------------------------------------------------------
+            # ======================================================
             interes_total = monto * (tasa_interes / 100)
             total_a_pagar = monto + interes_total
             pago_por_cuota = total_a_pagar / cuotas
 
-            # ---------------------------------------------------------
-            # RESUMEN BONITO
-            # ---------------------------------------------------------
-            st.success("✅ Préstamo autorizado correctamente.")
+            st.success("✔ Préstamo autorizado correctamente.")
 
-            st.header("🧾 Resumen del préstamo autorizado")
+            # ======================================================
+            # MOSTRAR RESUMEN EN TABLA
+            # ======================================================
 
-            st.subheader("📘 Detalle del préstamo")
-            st.write(f"🔹 **Beneficiaria:** {nombre_socia}")
-            st.write(f"🔹 **ID:** {id_socia}")
-            st.write(f"🔹 **Monto prestado:** ${monto:.2f}")
-            st.write(f"🔹 **Tasa de interés:** {tasa_interes}%")
-            st.write(f"🔹 **Plazo:** {plazo_meses} meses")
-            st.write(f"🔹 **Cuotas:** {cuotas}")
-            st.write(f"🔹 **Fecha del préstamo:** {fecha_prestamo}")
+            st.subheader("📄 Resumen del préstamo autorizado")
 
-            st.subheader("📊 Cálculos del préstamo")
-            st.write(f"💰 **Interés total:** ${interes_total:.2f}")
-            st.write(f"💵 **Total a pagar:** ${total_a_pagar:.2f}")
-            st.write(f"📦 **Pago por cuota:** ${pago_por_cuota:.2f}")
+            data = [
+                ["Campo", "Valor"],
+                ["ID de socia", id_socia],
+                ["Nombre", socia_seleccionada.split(" - ")[1]],
+                ["Monto prestado", f"${monto:.2f}"],
+                ["Interés (%)", f"{tasa_interes}%"],
+                ["Interés total generado", f"${interes_total:.2f}"],
+                ["Total a pagar", f"${total_a_pagar:.2f}"],
+                ["Cuotas", cuotas],
+                ["Pago por cuota", f"${pago_por_cuota:.2f}"],
+                ["Fecha del préstamo", str(fecha_prestamo)],
+            ]
+
+            df_resumen = pd.DataFrame(data, columns=["Detalle", "Valor"])
+            st.table(df_resumen)
+
+            # ======================================================
+            # DESCARGAR PDF
+            # ======================================================
+            if st.button("📥 Descargar resumen en PDF"):
+
+                nombre_pdf = f"prestamo_socia_{id_socia}.pdf"
+
+                doc = SimpleDocTemplate(nombre_pdf, pagesize=letter)
+                tabla_pdf = Table(data)
+                tabla_pdf.setStyle(TableStyle([
+                    ("BACKGROUND", (0,0), (-1,0), colors.gray),
+                    ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
+                    ("ALIGN", (0,0), (-1,-1), "CENTER"),
+                    ("BOX", (0,0), (-1,-1), 1, colors.black),
+                    ("GRID", (0,0), (-1,-1), 1, colors.black),
+                ]))
+
+                doc.build([tabla_pdf])
+
+                with open(nombre_pdf, "rb") as f:
+                    st.download_button("📥 Descargar PDF", f, file_name=nombre_pdf)
 
         except Exception as e:
             st.error(f"❌ Error al registrar el préstamo: {e}")
-
-    
