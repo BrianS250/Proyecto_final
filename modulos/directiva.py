@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 from modulos.conexion import obtener_conexion
-from modulos.autorizar_prestamo import autorizar_prestamo   # << NUEVA IMPORTACIÓN
+from modulos.autorizar_prestamo import autorizar_prestamo   # << IMPORTACIÓN CORRECTA
 
 
 # ---------------------------------------------------------
@@ -25,7 +25,7 @@ def interfaz_directiva():
         st.rerun()
 
     # ---------------------------------------------------------
-    # 🔵 MENÚ DE SECCIONES (AQUÍ AGREGAMOS SOLO UNA LÍNEA)
+    # 🔵 MENÚ LATERAL (SE AGREGA SOLO UNA LÍNEA)
     # ---------------------------------------------------------
     menu = st.sidebar.radio(
         "Seleccione una sección:",
@@ -33,13 +33,13 @@ def interfaz_directiva():
             "Registro de asistencia",
             "Aplicar multas",
             "Registrar nuevas socias",
-            "Autorizar préstamo",      # << AGREGADO
+            "Autorizar préstamo",       # << AGREGADO AQUÍ
             "📄 Generar reporte"
         ]
     )
 
     # ---------------------------------------------------------
-    # 🔵 RUTEO DE MENÚ (SOLO SE AGREGA UNA OPCIÓN)
+    # 🔵 RUTEO DEL MENÚ (SE AGREGA SOLO UNA OPCIÓN)
     # ---------------------------------------------------------
     if menu == "Registro de asistencia":
         pagina_asistencia()
@@ -47,7 +47,7 @@ def interfaz_directiva():
         pagina_multas()
     elif menu == "Registrar nuevas socias":
         pagina_registro_socias()
-    elif menu == "Autorizar préstamo":     # << AGREGADO
+    elif menu == "Autorizar préstamo":    # << AGREGADO AQUÍ
         autorizar_prestamo()
     else:
         pagina_reporte()
@@ -55,7 +55,7 @@ def interfaz_directiva():
 
 
 # ---------------------------------------------------------
-# 🟩 REGISTRO DE ASISTENCIA  (SIN CAMBIOS)
+# 🟩 REGISTRO DE ASISTENCIA
 # ---------------------------------------------------------
 def pagina_asistencia():
 
@@ -68,14 +68,12 @@ def pagina_asistencia():
 
     cursor = con.cursor()
 
+    # Selección de fecha
     fecha_raw = st.date_input("📅 Fecha de reunión", value=date.today())
     fecha = fecha_raw.strftime("%Y-%m-%d")
 
-    cursor.execute("""
-        SELECT Id_Reunion 
-        FROM Reunion 
-        WHERE Fecha_reunion = %s
-    """, (fecha,))
+    # Verificar si la reunión existe o crearla
+    cursor.execute("SELECT Id_Reunion FROM Reunion WHERE Fecha_reunion = %s", (fecha,))
     row = cursor.fetchone()
 
     if row:
@@ -99,11 +97,13 @@ def pagina_asistencia():
 
             cols_sql = ", ".join(datos.keys())
             vals_sql = ", ".join(["%s"] * len(datos))
-            query = f"INSERT INTO Reunion ({cols_sql}) VALUES ({vals_sql})"
 
-            cursor.execute(query, list(datos.values()))
+            cursor.execute(
+                f"INSERT INTO Reunion ({cols_sql}) VALUES ({vals_sql})",
+                list(datos.values())
+            )
+
             con.commit()
-
             id_reunion = cursor.lastrowid
             st.info(f"Reunión creada (ID {id_reunion}).")
 
@@ -111,6 +111,9 @@ def pagina_asistencia():
             st.error(f"⚠ ERROR al crear la reunión: {e}")
             return
 
+    # -------------------------------------------------------------------
+    # MOSTRAR SOCIAS
+    # -------------------------------------------------------------------
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
 
@@ -135,6 +138,7 @@ def pagina_asistencia():
 
         asistencia_registro[id_socia] = asistencia
 
+    # Guardar asistencia
     if st.button("💾 Guardar asistencia general"):
 
         try:
@@ -142,11 +146,11 @@ def pagina_asistencia():
 
                 estado = "Presente" if asistencia == "SI" else "Ausente"
 
-                cursor.execute("""
-                    SELECT Id_Asistencia 
-                    FROM Asistencia 
-                    WHERE Id_Reunion = %s AND Id_Socia = %s
-                """, (id_reunion, id_socia))
+                cursor.execute(
+                    "SELECT Id_Asistencia FROM Asistencia "
+                    "WHERE Id_Reunion = %s AND Id_Socia = %s",
+                    (id_reunion, id_socia)
+                )
                 ya_existe = cursor.fetchone()
 
                 if ya_existe:
@@ -168,6 +172,7 @@ def pagina_asistencia():
         except Exception as e:
             st.error(f"Error al guardar asistencia: {e}")
 
+    # Mostrar registro actual
     cursor.execute("""
         SELECT S.Nombre, A.Estado_asistencia
         FROM Asistencia A
@@ -188,6 +193,9 @@ def pagina_asistencia():
 
     st.markdown("---")
 
+    # -----------------------------------------------
+    # INGRESOS EXTRAORDINARIOS
+    # -----------------------------------------------
     st.header("💰 Ingresos extraordinarios de la reunión")
 
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
@@ -235,7 +243,7 @@ def pagina_asistencia():
 
 
 # ---------------------------------------------------------
-# 🟥 APLICACIÓN DE MULTAS (SIN CAMBIOS)
+# 🟥 APLICACIÓN DE MULTAS
 # ---------------------------------------------------------
 def pagina_multas():
 
@@ -358,7 +366,7 @@ def pagina_multas():
 
 
 # ---------------------------------------------------------
-# 🟩 REGISTRO DE NUEVAS SOCIAS (SIN CAMBIOS)
+# 🟩 REGISTRO DE NUEVAS SOCIAS
 # ---------------------------------------------------------
 def pagina_registro_socias():
 
@@ -408,7 +416,7 @@ def pagina_registro_socias():
 
 
 # ---------------------------------------------------------
-# 📄 GENERAR REPORTE (SIN CAMBIOS)
+# 📄 GENERAR REPORTE
 # ---------------------------------------------------------
 def pagina_reporte():
 
@@ -426,6 +434,7 @@ def pagina_reporte():
 
     st.write("### Datos registrados")
 
+    # Asistencia
     cursor.execute("""
         SELECT S.Nombre, A.Estado_asistencia
         FROM Asistencia A
@@ -442,6 +451,7 @@ def pagina_reporte():
     else:
         st.info("No hay datos de asistencia para esta fecha.")
 
+    # Ingresos extraordinarios
     cursor.execute("""
         SELECT S.Nombre, I.Tipo, I.Descripcion, I.Monto
         FROM IngresosExtra I
