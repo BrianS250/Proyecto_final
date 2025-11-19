@@ -404,16 +404,52 @@ def pagina_registro_socias():
         st.info("Aún no hay socias registradas.")
 import streamlit as st
 import pandas as pd
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
-import tempfile
+from datetime import date
 from modulos.conexion import obtener_conexion
 
 
 # ---------------------------------------------------------
-# 🟦 GENERACIÓN DE REPORTES
+# 🟦 PANEL PRINCIPAL (SOLO DIRECTOR)
+# ---------------------------------------------------------
+def interfaz_directiva():
+
+    rol = st.session_state.get("rol", "")
+
+    if rol != "Director":
+        st.title("Acceso al sistema")
+        st.warning("⚠️ Acceso restringido. Esta sección es exclusiva para el Director.")
+        return
+
+    st.title("👩‍💼 Panel de la Directiva del Grupo")
+    st.write("Administre reuniones, asistencia, ingresos y multas.")
+
+    if st.sidebar.button("🔒 Cerrar sesión"):
+        st.session_state.clear()
+        st.rerun()
+
+    menu = st.sidebar.radio(
+        "Seleccione una sección:",
+        [
+            "Registro de asistencia",
+            "Aplicar multas",
+            "Registrar nuevas socias",
+            "📄 Generar reporte"
+        ]
+    )
+
+    if menu == "Registro de asistencia":
+        pagina_asistencia()
+    elif menu == "Aplicar multas":
+        pagina_multas()
+    elif menu == "Registrar nuevas socias":
+        pagina_registro_socias()
+    else:
+        pagina_reporte()
+
+
+
+# ---------------------------------------------------------
+# 📄 NUEVA FUNCIÓN — GENERAR REPORTE
 # ---------------------------------------------------------
 def pagina_reporte():
 
@@ -421,137 +457,129 @@ def pagina_reporte():
 
     con = obtener_conexion()
     if not con:
-        st.error("❌ No se pudo conectar a la base de datos.")
+        st.error("No se pudo conectar a la BD.")
         return
 
     cursor = con.cursor()
 
-    # ---------------------------------------------------------
-    # 1) Seleccionar fecha del reporte
-    # ---------------------------------------------------------
-    fecha_raw = st.date_input("Seleccione una fecha de reunión para el reporte")
+    # Seleccionar fecha de reporte
+    fecha_raw = st.date_input("📅 Seleccione la fecha del reporte", value=date.today())
     fecha = fecha_raw.strftime("%Y-%m-%d")
 
-    # Buscar reunión
-    cursor.execute("""
-        SELECT Id_Reunion 
-        FROM Reunion
-        WHERE Fecha_reunion = %s
-    """, (fecha,))
-    row = cursor.fetchone()
+    st.write("### Datos registrados")
 
-    if not row:
-        st.warning("⚠ No existe una reunión registrada para esa fecha.")
-        return
-
-    id_reunion = row[0]
-
-    st.success(f"Reunión encontrada (ID {id_reunion})")
-
-    st.markdown("---")
-
-    # ---------------------------------------------------------
-    # 2) Cargar asistencia
-    # ---------------------------------------------------------
+    # --------------------------------------------
+    # 🔹 Asistencia
+    # --------------------------------------------
     cursor.execute("""
         SELECT S.Nombre, A.Estado_asistencia
         FROM Asistencia A
         JOIN Socia S ON S.Id_Socia = A.Id_Socia
-        WHERE A.Id_Reunion = %s
-        ORDER BY S.Id_Socia ASC
-    """, (id_reunion,))
+        JOIN Reunion R ON R.Id_Reunion = A.Id_Reunion
+        WHERE R.Fecha_reunion = %s
+    """, (fecha,))
     asistencia = cursor.fetchall()
 
-    df_asistencia = pd.DataFrame(asistencia, columns=["Socia", "Asistencia"])
+    if asistencia:
+        df_a = pd.DataFrame(asistencia, columns=["Socia", "Asistencia"])
+        st.subheader("📝 Asistencia")
+        st.dataframe(df_a)
+    else:
+        st.info("No hay datos de asistencia para esta fecha.")
 
-    st.subheader("🧍‍♀️ Asistencia del día")
-    st.dataframe(df_asistencia)
-
-    total_presentes = df_asistencia[df_asistencia["Asistencia"] == "Presente"].shape[0]
-    st.info(f"👥 Total presentes: {total_presentes}")
-
-    st.markdown("---")
-
-    # ---------------------------------------------------------
-    # 3) Cargar ingresos extraordinarios
-    # ---------------------------------------------------------
+    # --------------------------------------------
+    # 🔹 Ingresos extra
+    # --------------------------------------------
     cursor.execute("""
         SELECT S.Nombre, I.Tipo, I.Descripcion, I.Monto
         FROM IngresosExtra I
         JOIN Socia S ON S.Id_Socia = I.Id_Socia
-        WHERE I.Id_Reunion = %s
-        ORDER BY I.Id_Ingreso ASC
-    """, (id_reunion,))
-
+        JOIN Reunion R ON R.Id_Reunion = I.Id_Reunion
+        WHERE R.Fecha_reunion = %s
+    """, (fecha,))
     ingresos = cursor.fetchall()
 
-    df_ing = pd.DataFrame(ingresos, columns=["Socia", "Tipo", "Descripción", "Monto"])
+    if ingresos:
+        df_i = pd.DataFrame(ingresos, columns=["Socia", "Tipo", "Descripción", "Monto"])
+        st.subheader("💰 Ingresos extraordinarios")
+        st.dataframe(df_i)
+        st.success(f"Total del día: ${df_i['Monto'].sum():.2f}")
+    else:
+        st.info("No hay ingresos extraordinarios para esta fecha.")
 
-    st.subheader("💰 Ingresos extraordinarios")
-    st.dataframe(df_ing)
-
-    total_ingresos = df_ing["Monto"].sum() if not df_ing.empty else 0
-    st.success(f"💵 Total del día: ${total_ingresos:.2f}")
-
+    # ---------------------------------------------------------
+    # 🟦 BOTÓN PARA GENERAR PDF
+    # ---------------------------------------------------------
     st.markdown("---")
+    st.subheader("📄 Exportar reporte a PDF")
 
-    # ---------------------------------------------------------
-    # 4) GENERAR PDF
-    # ---------------------------------------------------------
+    if st.button("⬇ Descargar PDF"):
 
-    def generar_pdf():
-        temp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-        doc = SimpleDocTemplate(temp.name, pagesize=letter)
+        # IMPORTAMOS REPORTLAB SOLO AQUÍ
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.pdfgen import canvas
+            import io
 
-        styles = getSampleStyleSheet()
-        story = []
+        except ImportError:
+            st.error("⚠ No se encontró la librería reportlab.")
+            st.info("Agrega esto a tu requirements.txt:")
+            st.code("reportlab")
+            return
 
-        # Título
-        story.append(Paragraph(f"Reporte del Grupo - Fecha: {fecha}", styles["Title"]))
-        story.append(Paragraph(" ", styles["Normal"]))
+        # Crear PDF en memoria
+        buffer = io.BytesIO()
+        pdf = canvas.Canvas(buffer, pagesize=letter)
 
-        # Tabla de asistencia
-        story.append(Paragraph("Asistencia:", styles["Heading2"]))
+        pdf.setFont("Helvetica-Bold", 16)
+        pdf.drawString(50, 760, "Reporte General del Grupo")
+        pdf.setFont("Helvetica", 12)
+        pdf.drawString(50, 740, f"Fecha: {fecha}")
 
-        tabla_asistencia = [["Socia", "Asistencia"]] + asistencia
-        tabla = Table(tabla_asistencia)
-        tabla.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,0), colors.gray),
-            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
-            ("GRID", (0,0), (-1,-1), 1, colors.black),
-            ("ALIGN", (0,0), (-1,-1), "CENTER"),
-        ]))
-        story.append(tabla)
-        story.append(Paragraph(" ", styles["Normal"]))
+        y = 710
+        pdf.setFont("Helvetica-Bold", 14)
+        pdf.drawString(50, y, "Asistencia:")
+        y -= 20
+        pdf.setFont("Helvetica", 12)
 
-        # Tabla ingresos
-        story.append(Paragraph("Ingresos extraordinarios:", styles["Heading2"]))
+        if asistencia:
+            for nombre, estado in asistencia:
+                pdf.drawString(60, y, f"- {nombre}: {estado}")
+                y -= 15
+        else:
+            pdf.drawString(60, y, "No hay registros.")
+            y -= 20
 
-        tabla_ing = [["Socia", "Tipo", "Descripción", "Monto"]] + ingresos
-        tabla2 = Table(tabla_ing)
-        tabla2.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,0), colors.gray),
-            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
-            ("GRID", (0,0), (-1,-1), 1, colors.black),
-            ("ALIGN", (0,0), (-1,-1), "CENTER"),
-        ]))
-        story.append(tabla2)
+        y -= 10
+        pdf.setFont("Helvetica-Bold", 14)
+        pdf.drawString(50, y, "Ingresos extraordinarios:")
+        y -= 20
+        pdf.setFont("Helvetica", 12)
 
-        story.append(Paragraph(f"Total ingresos: ${total_ingresos:.2f}", styles["Heading3"]))
+        if ingresos:
+            for fila in ingresos:
+                nombre, tipo, desc, monto = fila
+                pdf.drawString(60, y, f"- {nombre} | {tipo} | ${monto}")
+                y -= 15
+        else:
+            pdf.drawString(60, y, "No hay registros.")
 
-        doc.build(story)
+        pdf.save()
+        buffer.seek(0)
 
-        return temp.name
+        st.download_button(
+            label="📥 Descargar reporte PDF",
+            data=buffer,
+            file_name=f"Reporte_{fecha}.pdf",
+            mime="application/pdf"
+        )
 
 
-    st.subheader("📥 Descargar reporte PDF")
 
-    if st.button("📄 Generar PDF"):
-        pdf_path = generar_pdf()
-        with open(pdf_path, "rb") as pdf:
-            st.download_button(
-                label="⬇ Descargar reporte en PDF",
-                data=pdf,
-                file_name=f"Reporte_{fecha}.pdf",
-                mime="application/pdf"
-            )
+# ---------------------------------------------------------
+# 🟩 (El resto de funciones no se modifican)
+# ---------------------------------------------------------
+
+# pagina_asistencia()
+# pagina_multas()
+# pagina_registro_socias()
