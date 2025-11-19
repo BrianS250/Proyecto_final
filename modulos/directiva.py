@@ -40,8 +40,9 @@ def interfaz_directiva():
         pagina_registro_socias()
 
 
+
 # ---------------------------------------------------------
-# 🟩 REGISTRO DE ASISTENCIA
+# 🟩 REGISTRO DE ASISTENCIA  (CON INGRESOS EXTRA)
 # ---------------------------------------------------------
 def pagina_asistencia():
 
@@ -58,8 +59,7 @@ def pagina_asistencia():
     fecha = fecha_raw.strftime("%Y-%m-%d")
 
     # ---------------------------------------------------------
-    # MEJORA IMPLEMENTADA AQUÍ 👇
-    # PERMITIR CUALQUIER FECHA EN LA REUNIÓN
+    # PERMITIR CUALQUIER FECHA
     # ---------------------------------------------------------
     cursor.execute("""
         SELECT Id_Reunion 
@@ -72,11 +72,9 @@ def pagina_asistencia():
         id_reunion = row[0]
     else:
         try:
-            # Obtener columnas de la tabla Reunion
             cursor.execute("SHOW COLUMNS FROM Reunion")
             columnas = [col[0] for col in cursor.fetchall()]
 
-            # Valores obligatorios
             datos = {
                 "Fecha_reunion": fecha,
                 "observaciones": "",
@@ -85,12 +83,10 @@ def pagina_asistencia():
                 "Id_Grupo": 1
             }
 
-            # Llenar columnas faltantes con valores vacíos
             for col in columnas:
                 if col not in datos and col != "Id_Reunion":
                     datos[col] = ""
 
-            # INSERT dinámico
             cols_sql = ", ".join(datos.keys())
             vals_sql = ", ".join(["%s"] * len(datos))
             query = f"INSERT INTO Reunion ({cols_sql}) VALUES ({vals_sql})"
@@ -106,7 +102,8 @@ def pagina_asistencia():
             return
 
     # ---------------------------------------------------------
-
+    # LISTA DE SOCIAS PARA ASISTENCIA
+    # ---------------------------------------------------------
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
 
@@ -120,7 +117,6 @@ def pagina_asistencia():
 
     for idx, (id_socia, nombre) in enumerate(socias, start=1):
         c1, c2, c3 = st.columns([1, 3, 3])
-
         c1.write(idx)
         c2.write(nombre)
 
@@ -129,9 +125,11 @@ def pagina_asistencia():
             ["SI", "NO"],
             key=f"asis_{id_socia}"
         )
-
         asistencia_registro[id_socia] = asistencia
 
+    # ---------------------------------------------------------
+    # GUARDAR ASISTENCIA
+    # ---------------------------------------------------------
     if st.button("💾 Guardar asistencia general"):
 
         try:
@@ -152,7 +150,6 @@ def pagina_asistencia():
                         SET Estado_asistencia = %s, Fecha = %s
                         WHERE Id_Reunion = %s AND Id_Socia = %s
                     """, (estado, fecha, id_reunion, id_socia))
-
                 else:
                     cursor.execute("""
                         INSERT INTO Asistencia (Id_Reunion, Id_Socia, Estado_asistencia, Fecha)
@@ -165,13 +162,15 @@ def pagina_asistencia():
         except Exception as e:
             st.error(f"Error al guardar asistencia: {e}")
 
+    # ---------------------------------------------------------
+    # MOSTRAR RESUMEN
+    # ---------------------------------------------------------
     cursor.execute("""
         SELECT S.Nombre, A.Estado_asistencia
         FROM Asistencia A
         JOIN Socia S ON S.Id_Socia = A.Id_Socia
         WHERE A.Id_Reunion = %s
     """, (id_reunion,))
-
     registros = cursor.fetchall()
 
     if registros:
@@ -183,6 +182,47 @@ def pagina_asistencia():
         st.success(f"👥 Total presentes: {total_presentes}")
     else:
         st.info("Aún no hay asistencia registrada.")
+
+    st.markdown("---")
+
+    # =========================================================
+    # 🟩 SECCIÓN NUEVA: INGRESOS EXTRAORDINARIOS
+    # =========================================================
+    st.header("💰 Ingresos extraordinarios de la reunión")
+
+    tipo = st.selectbox("Tipo de ingreso:", ["Rifa", "Donación", "Actividad", "Otro"])
+    descripcion = st.text_input("Descripción del ingreso (opcional)")
+    monto = st.number_input("Monto recibido ($):", min_value=0.00, step=0.50)
+
+    if st.button("➕ Registrar ingreso extraordinario"):
+        try:
+            cursor.execute("""
+                INSERT INTO IngresosExtra (Id_Reunion, Tipo, Descripcion, Monto)
+                VALUES (%s, %s, %s, %s)
+            """, (id_reunion, tipo, descripcion, monto))
+
+            con.commit()
+            st.success("Ingreso extraordinario registrado con éxito.")
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"❌ Error al registrar ingreso: {e}")
+
+    # Mostrar ingresos ya registrados
+    cursor.execute("""
+        SELECT Tipo, Descripcion, Monto
+        FROM IngresosExtra
+        WHERE Id_Reunion = %s
+    """, (id_reunion,))
+    ingresos = cursor.fetchall()
+
+    if ingresos:
+        df_ing = pd.DataFrame(ingresos, columns=["Tipo", "Descripción", "Monto"])
+        st.subheader("📌 Ingresos registrados")
+        st.dataframe(df_ing)
+    else:
+        st.info("No hay ingresos extraordinarios registrados.")
+
 
 
 # ---------------------------------------------------------
@@ -305,6 +345,7 @@ def pagina_multas():
 
     else:
         st.info("No hay multas registradas con esos filtros.")
+
 
 
 # ---------------------------------------------------------
