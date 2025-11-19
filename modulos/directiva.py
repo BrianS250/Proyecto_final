@@ -29,13 +29,19 @@ def interfaz_directiva():
 
     menu = st.sidebar.radio(
         "Seleccione una sección:",
-        ["Registro de asistencia", "Aplicar multas"]
+        [
+            "Registro de asistencia",
+            "Aplicar multas",
+            "Registrar nuevas socias"   # 👈 NUEVA OPCIÓN
+        ]
     )
 
     if menu == "Registro de asistencia":
         pagina_asistencia()
-    else:
+    elif menu == "Aplicar multas":
         pagina_multas()
+    else:
+        pagina_registro_socias()   # 👈 NUEVA FUNCIÓN
 
 
 # ---------------------------------------------------------
@@ -281,3 +287,56 @@ def pagina_multas():
 
     else:
         st.info("No hay multas registradas con esos filtros.")
+
+
+# ---------------------------------------------------------
+# 🟩 NUEVA FUNCIÓN — REGISTRAR SOCIAS
+# ---------------------------------------------------------
+def pagina_registro_socias():
+
+    st.header("👩‍🦰 Registro de nuevas socias")
+
+    con = obtener_conexion()
+    if not con:
+        st.error("No se pudo conectar a la base de datos.")
+        return
+
+    cursor = con.cursor()
+
+    st.subheader("➕ Agregar una nueva socia")
+
+    nombre = st.text_input("Nombre completo de la socia")
+    estado = st.selectbox("Estado inicial", ["Activa", "Inactiva"])
+
+    if st.button("💾 Registrar socia"):
+
+        if nombre.strip() == "":
+            st.warning("⚠ Debe escribir un nombre.")
+            return
+
+        try:
+            cursor.execute("""
+                INSERT INTO Socia (Nombre, Sexo, Estado)
+                VALUES (%s, 'F', %s)
+            """, (nombre, estado))
+
+            con.commit()
+            st.success(f"👩‍🦰 Nueva socia registrada correctamente: {nombre}")
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"❌ Error al registrar socia: {e}")
+
+    st.markdown("---")
+
+    # Mostrar socias registradas
+    st.subheader("📋 Lista de socias registradas")
+
+    cursor.execute("SELECT Id_Socia, Nombre, Estado FROM Socia ORDER BY Id_Socia ASC")
+    datos = cursor.fetchall()
+
+    if datos:
+        df = pd.DataFrame(datos, columns=["ID", "Nombre", "Estado"])
+        st.dataframe(df)
+    else:
+        st.info("Aún no hay socias registradas.")
