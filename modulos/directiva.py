@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 from modulos.conexion import obtener_conexion
+from modulos.autorizar_prestamo import autorizar_prestamo   # << NUEVA IMPORTACIÓN
 
 
 # ---------------------------------------------------------
@@ -17,32 +18,44 @@ def interfaz_directiva():
         return
 
     st.title("👩‍💼 Panel de la Directiva del Grupo")
-    st.write("Administre reuniones, asistencia y multas.")
+    st.write("Administre reuniones, asistencia, ingresos, multas y préstamos.")
 
     if st.sidebar.button("🔒 Cerrar sesión"):
         st.session_state.clear()
         st.rerun()
 
+    # ---------------------------------------------------------
+    # 🔵 MENÚ DE SECCIONES (AQUÍ AGREGAMOS SOLO UNA LÍNEA)
+    # ---------------------------------------------------------
     menu = st.sidebar.radio(
         "Seleccione una sección:",
         [
             "Registro de asistencia",
             "Aplicar multas",
-            "Registrar nuevas socias"
+            "Registrar nuevas socias",
+            "Autorizar préstamo",      # << AGREGADO
+            "📄 Generar reporte"
         ]
     )
 
+    # ---------------------------------------------------------
+    # 🔵 RUTEO DE MENÚ (SOLO SE AGREGA UNA OPCIÓN)
+    # ---------------------------------------------------------
     if menu == "Registro de asistencia":
         pagina_asistencia()
     elif menu == "Aplicar multas":
         pagina_multas()
-    else:
+    elif menu == "Registrar nuevas socias":
         pagina_registro_socias()
+    elif menu == "Autorizar préstamo":     # << AGREGADO
+        autorizar_prestamo()
+    else:
+        pagina_reporte()
 
 
 
 # ---------------------------------------------------------
-# 🟩 REGISTRO DE ASISTENCIA
+# 🟩 REGISTRO DE ASISTENCIA  (SIN CAMBIOS)
 # ---------------------------------------------------------
 def pagina_asistencia():
 
@@ -58,9 +71,6 @@ def pagina_asistencia():
     fecha_raw = st.date_input("📅 Fecha de reunión", value=date.today())
     fecha = fecha_raw.strftime("%Y-%m-%d")
 
-    # ---------------------------------------------------------
-    # PERMITIR CUALQUIER FECHA
-    # ---------------------------------------------------------
     cursor.execute("""
         SELECT Id_Reunion 
         FROM Reunion 
@@ -101,9 +111,6 @@ def pagina_asistencia():
             st.error(f"⚠ ERROR al crear la reunión: {e}")
             return
 
-    # ---------------------------------------------------------
-    # ASISTENCIA (ORDEN CORREGIDO POR ID)
-    # ---------------------------------------------------------
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
 
@@ -181,9 +188,6 @@ def pagina_asistencia():
 
     st.markdown("---")
 
-    # ============================================================
-    # 🔵 INGRESOS EXTRAORDINARIOS (AHORA INCLUYE FECHA)
-    # ============================================================
     st.header("💰 Ingresos extraordinarios de la reunión")
 
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
@@ -197,7 +201,6 @@ def pagina_asistencia():
     descripcion = st.text_input("Descripción del ingreso (opcional)")
     monto = st.number_input("Monto recibido ($):", min_value=0.00, step=0.50)
 
-    # ⬅️ NUEVO: Registrar también la fecha
     if st.button("➕ Registrar ingreso extraordinario"):
         try:
             cursor.execute("""
@@ -224,7 +227,6 @@ def pagina_asistencia():
         df_ing = pd.DataFrame(ingresos, columns=["Socia", "Tipo", "Descripción", "Monto", "Fecha"])
         st.subheader("📌 Ingresos registrados hoy")
         st.dataframe(df_ing)
-
         total_dia = df_ing["Monto"].sum()
         st.success(f"💵 Total del día: ${total_dia:.2f}")
     else:
@@ -233,7 +235,7 @@ def pagina_asistencia():
 
 
 # ---------------------------------------------------------
-# 🟥 APLICACIÓN DE MULTAS
+# 🟥 APLICACIÓN DE MULTAS (SIN CAMBIOS)
 # ---------------------------------------------------------
 def pagina_multas():
 
@@ -356,7 +358,7 @@ def pagina_multas():
 
 
 # ---------------------------------------------------------
-# 🟩 REGISTRO DE NUEVAS SOCIAS
+# 🟩 REGISTRO DE NUEVAS SOCIAS (SIN CAMBIOS)
 # ---------------------------------------------------------
 def pagina_registro_socias():
 
@@ -402,54 +404,11 @@ def pagina_registro_socias():
         st.dataframe(df)
     else:
         st.info("Aún no hay socias registradas.")
-import streamlit as st
-import pandas as pd
-from datetime import date
-from modulos.conexion import obtener_conexion
-
-
-# ---------------------------------------------------------
-# 🟦 PANEL PRINCIPAL (SOLO DIRECTOR)
-# ---------------------------------------------------------
-def interfaz_directiva():
-
-    rol = st.session_state.get("rol", "")
-
-    if rol != "Director":
-        st.title("Acceso al sistema")
-        st.warning("⚠️ Acceso restringido. Esta sección es exclusiva para el Director.")
-        return
-
-    st.title("👩‍💼 Panel de la Directiva del Grupo")
-    st.write("Administre reuniones, asistencia, ingresos y multas.")
-
-    if st.sidebar.button("🔒 Cerrar sesión"):
-        st.session_state.clear()
-        st.rerun()
-
-    menu = st.sidebar.radio(
-        "Seleccione una sección:",
-        [
-            "Registro de asistencia",
-            "Aplicar multas",
-            "Registrar nuevas socias",
-            "📄 Generar reporte"
-        ]
-    )
-
-    if menu == "Registro de asistencia":
-        pagina_asistencia()
-    elif menu == "Aplicar multas":
-        pagina_multas()
-    elif menu == "Registrar nuevas socias":
-        pagina_registro_socias()
-    else:
-        pagina_reporte()
 
 
 
 # ---------------------------------------------------------
-# 📄 NUEVA FUNCIÓN — GENERAR REPORTE
+# 📄 GENERAR REPORTE (SIN CAMBIOS)
 # ---------------------------------------------------------
 def pagina_reporte():
 
@@ -462,15 +421,11 @@ def pagina_reporte():
 
     cursor = con.cursor()
 
-    # Seleccionar fecha de reporte
     fecha_raw = st.date_input("📅 Seleccione la fecha del reporte", value=date.today())
     fecha = fecha_raw.strftime("%Y-%m-%d")
 
     st.write("### Datos registrados")
 
-    # --------------------------------------------
-    # 🔹 Asistencia
-    # --------------------------------------------
     cursor.execute("""
         SELECT S.Nombre, A.Estado_asistencia
         FROM Asistencia A
@@ -487,9 +442,6 @@ def pagina_reporte():
     else:
         st.info("No hay datos de asistencia para esta fecha.")
 
-    # --------------------------------------------
-    # 🔹 Ingresos extra
-    # --------------------------------------------
     cursor.execute("""
         SELECT S.Nombre, I.Tipo, I.Descripcion, I.Monto
         FROM IngresosExtra I
@@ -507,15 +459,11 @@ def pagina_reporte():
     else:
         st.info("No hay ingresos extraordinarios para esta fecha.")
 
-    # ---------------------------------------------------------
-    # 🟦 BOTÓN PARA GENERAR PDF
-    # ---------------------------------------------------------
     st.markdown("---")
     st.subheader("📄 Exportar reporte a PDF")
 
     if st.button("⬇ Descargar PDF"):
 
-        # IMPORTAMOS REPORTLAB SOLO AQUÍ
         try:
             from reportlab.lib.pagesizes import letter
             from reportlab.pdfgen import canvas
@@ -527,7 +475,6 @@ def pagina_reporte():
             st.code("reportlab")
             return
 
-        # Crear PDF en memoria
         buffer = io.BytesIO()
         pdf = canvas.Canvas(buffer, pagesize=letter)
 
@@ -573,13 +520,3 @@ def pagina_reporte():
             file_name=f"Reporte_{fecha}.pdf",
             mime="application/pdf"
         )
-
-
-
-# ---------------------------------------------------------
-# 🟩 (El resto de funciones no se modifican)
-# ---------------------------------------------------------
-
-# pagina_asistencia()
-# pagina_multas()
-# pagina_registro_socias()
