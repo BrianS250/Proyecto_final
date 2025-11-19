@@ -1,31 +1,48 @@
 import streamlit as st
+
 from modulos.login import login
 from modulos.directiva import interfaz_directiva
+from modulos.promotora import interfaz_promotora
+from modulos.administrador import interfaz_admin  # si existe
 
+
+# -------------------------------
+# ESTADOS DE SESIÓN
+# -------------------------------
 
 if "sesion_iniciada" not in st.session_state:
     st.session_state["sesion_iniciada"] = False
 
+if "rol" not in st.session_state:
+    st.session_state["rol"] = None
+
+
+# -------------------------------
+# LÓGICA PRINCIPAL
+# -------------------------------
 
 if st.session_state["sesion_iniciada"]:
 
-    rol = st.session_state["rol"]
+    rol = st.session_state["rol"]  # ← tal cual viene de BD
 
-    # 🔵 DIRECTOR
+    # DIRECTOR = panel de directiva
     if rol == "Director":
         interfaz_directiva()
 
-    # 🔴 ADMIN
-    elif rol == "Administrador":
-        st.title("🛠 Panel del Administrador")
-        st.info("Acceso limitado. El administrador no puede gestionar asistencia ni multas.")
-
-    # 🟣 PROMOTORA
+    # PROMOTORA = panel de promotora
     elif rol == "Promotora":
-        st.title("👩‍💼 Panel de la Promotora")
-        st.info("Acceso limitado. La promotora no puede gestionar asistencia ni multas.")
+        interfaz_promotora()
 
-    # Botón para cerrar sesión
+    # ADMINISTRADOR
+    elif rol == "Administrador":
+        interfaz_admin()
+
+    else:
+        st.error(f"❌ Rol no reconocido por el sistema: {rol}")
+        st.session_state.clear()
+        st.rerun()
+
+    # Cerrar sesión
     if st.sidebar.button("Cerrar sesión"):
         st.session_state.clear()
         st.rerun()
