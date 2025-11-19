@@ -1,6 +1,6 @@
 import streamlit as st
-from datetime import date
 from modulos.conexion import obtener_conexion
+from datetime import date
 
 
 def autorizar_prestamo():
@@ -18,7 +18,7 @@ def autorizar_prestamo():
     socias = cursor.fetchall()
 
     if not socias:
-        st.warning("⚠ No hay socias registradas.")
+        st.warning("⚠️ No hay socias registradas.")
         return
 
     lista_socias = {nombre: ids for (ids, nombre) in socias}
@@ -51,7 +51,9 @@ def autorizar_prestamo():
     # ======================================================
     if enviar:
 
-        # 1. Verificar caja
+        # --------------------------------------------------
+        # 1. VERIFICAR SALDO DE CAJA
+        # --------------------------------------------------
         cursor.execute("SELECT Id_Caja, Saldo_actual FROM Caja ORDER BY Id_Caja DESC LIMIT 1")
         caja = cursor.fetchone()
 
@@ -67,11 +69,17 @@ def autorizar_prestamo():
 
         saldo_pendiente = monto
 
+        # Cálculos del resumen
+        interes_decimal = tasa_interes / 100
+        interes_total = monto * interes_decimal
+        total_a_pagar = monto + interes_total
+        pago_por_cuota = total_a_pagar / cuotas
+
         try:
             # --------------------------------------------------
-            # 2. INSERTAR PRÉSTAMO
+            # 2. REGISTRAR PRÉSTAMO
             # --------------------------------------------------
-            cursor.execute(f"""
+            cursor.execute("""
                 INSERT INTO Prestamo(
                     `Fecha del préstamo`,
                     `Monto prestado`,
@@ -94,57 +102,55 @@ def autorizar_prestamo():
                 cuotas,
                 saldo_pendiente,
                 "activo",
-                1,
-                id_socia,
-                id_caja
+                1,          # Id_Grupo
+                id_socia,   # Id de la socia
+                id_caja     # Caja usada
             ))
 
             # --------------------------------------------------
-            # 3. REGISTRAR EGRESO EN CAJA
+            # 3. REGISTRAR EGRESO EN CAJA **CON FECHA**
             # --------------------------------------------------
             cursor.execute("""
-                INSERT INTO Caja(Concepto, Monto, Saldo_actual, Id_Grupo, Id_Tipo_movimiento)
-                VALUES (%s,%s,%s,%s,%s)
+                INSERT INTO Caja(Fecha, Concepto, Monto, Saldo_actual, Id_Grupo, Id_Tipo_movimiento)
+                VALUES (%s,%s,%s,%s,%s,%s)
             """,
             (
-                f"Préstamo otorgado a: {nombre_socia}",
-                -monto,
-                saldo_actual - monto,
-                1,
-                3
+                fecha_prestamo,                                      # Fecha del movimiento
+                f"Préstamo otorgado a: {nombre_socia}",              # Concepto
+                -monto,                                              # Egreso
+                saldo_actual - monto,                                # Nuevo saldo
+                1,                                                   # Grupo
+                3                                                    # Id tipo: egreso
             ))
 
             con.commit()
 
             st.success("✅ Préstamo autorizado correctamente.")
-            st.info(f"Nuevo saldo en caja: ${saldo_actual - monto}")
+            st.info(f"💰 Nuevo saldo en caja: **${saldo_actual - monto}**")
 
-            # ======================================================
-            # 📌 RESUMEN DETALLADO DEL PRÉSTAMO
-            # ======================================================
-            tasa_decimal = tasa_interes / 100
-            total_interes = monto * tasa_decimal
-            total_pagar = monto + total_interes
-            pago_por_cuota = total_pagar / cuotas
-
-            st.markdown("---")
-            st.subheader("📘 Resumen del préstamo")
+            # --------------------------------------------------
+            # 4. MOSTRAR RESUMEN DETALLADO DEL PRÉSTAMO
+            # --------------------------------------------------
+            st.subheader("📄 Resumen del préstamo autorizado")
 
             st.write(f"""
-            **📅 Fecha del préstamo:** {fecha_prestamo}  
-            **👩 Id de la socia:** {id_socia}  
-            **👩 Nombre:** {nombre_socia}  
+            ### 🧾 Detalle del préstamo
+
+            **📌 Beneficiaria:**  
+            **ID:** {id_socia}  
+            **Nombre:** {nombre_socia}  
 
             **💵 Monto prestado:** ${monto:,.2f}  
             **📈 Tasa de interés:** {tasa_interes}%  
-            **💰 Interés total generado:** ${total_interes:,.2f}  
+            **🗓 Plazo:** {plazo} meses  
+            **📑 Cuotas:** {cuotas} cuotas  
+            **📅 Fecha del préstamo:** {fecha_prestamo}
 
-            **🧮 Total a pagar:** ${total_pagar:,.2f}  
-            **📑 Número de cuotas:** {cuotas}  
-            **💸 Pago por cuota:** ${pago_por_cuota:,.2f}  
+            ### 🧮 Cálculos del préstamo
+            **Interés total:** ${interes_total:,.2f}  
+            **Total a pagar:** ${total_a_pagar:,.2f}  
+            **Pago por cuota:** ${pago_por_cuota:,.2f}
             """)
-
-            st.success("✔ Cálculo realizado correctamente.")
 
         except Exception as e:
             con.rollback()
