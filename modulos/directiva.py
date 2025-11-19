@@ -21,6 +21,19 @@ def interfaz_directiva():
     st.title("👩‍💼 Panel de la Directiva del Grupo")
     st.write("Administre reuniones, asistencia y multas.")
 
+    # 🔹 MOSTRAR SALDO ACTUAL DE CAJA (AGREGADO)
+    try:
+        con = obtener_conexion()
+        cursor = con.cursor()
+        cursor.execute("SELECT Saldo_actual FROM Caja ORDER BY Id_Caja DESC LIMIT 1")
+        row = cursor.fetchone()
+        if row:
+            st.info(f"💰 **Saldo actual de caja:** ${row[0]}")
+        else:
+            st.warning("⚠ Caja aún no tiene saldo asignado.")
+    except:
+        st.warning("⚠ No se pudo obtener el saldo actual de caja.")
+
     if st.sidebar.button("🔒 Cerrar sesión"):
         st.session_state.clear()
         st.rerun()
@@ -229,6 +242,9 @@ def pagina_asistencia():
     else:
         st.info("No hay ingresos extraordinarios registrados hoy.")
 
+    # Fin de asistencia
+
+
 
 
 # ---------------------------------------------------------
@@ -351,6 +367,7 @@ def pagina_multas():
 
     else:
         st.info("No hay multas registradas con esos filtros.")
+
 
 
 
