@@ -58,20 +58,20 @@ def validar_finanzas():
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
 
-    cursor.execute("SELECT * FROM Prestamo")
-    prestamos = cursor.fetchall()
+    try:
+        cursor.execute("SELECT * FROM `Préstamo`")   # ← tabla correcta
+        prestamos = cursor.fetchall()
 
-    if not prestamos:
-        st.info("No hay préstamos registrados.")
-        return
+        if not prestamos:
+            st.info("No se encontraron préstamos registrados.")
+            return
 
-    for p in prestamos:
-        st.write(f"ID: {p['Id_Prestamo']}")
-        st.write(f"Monto: {p['Monto']}")
-        st.write(f"Estado: {p['Estado']}")
-        st.markdown("---")
+        for p in prestamos:
+            st.write(f"🆔 ID Préstamo: {p['Id_Prestamo']}")
+            st.write(f"💵 Monto: {p['Monto']}")
+            st.write(f"📌 Estado: {p['Estado']}")
+            st.markdown("---")
 
+    except Exception as e:
+        st.error(f"⚠ Error al consultar tabla Préstamo: {e}")
 
-def reportes():
-    st.header("📊 Reportes Consolidados")
-    st.info("Aquí se generarán reportes PDF/Excel en futuras versiones.")
