@@ -9,7 +9,6 @@ from modulos.conexion import obtener_conexion
 # ---------------------------------------------------------
 def interfaz_directiva():
 
-    # 🚫 Bloqueo para quien NO sea director 
     rol = st.session_state.get("rol", "")
 
     if rol != "Director":
@@ -17,9 +16,6 @@ def interfaz_directiva():
         st.warning("⚠️ Acceso restringido. Esta sección es exclusiva para el Director.")
         return
 
-    # ------------------------------------------------------
-    # SI ES DIRECTOR, ENTRA NORMAL
-    # ------------------------------------------------------
     st.title("👩‍💼 Panel de la Directiva del Grupo")
     st.write("Administre reuniones, asistencia y multas.")
 
@@ -32,7 +28,7 @@ def interfaz_directiva():
         [
             "Registro de asistencia",
             "Aplicar multas",
-            "Registrar nuevas socias"   # 👈 NUEVA OPCIÓN
+            "Registrar nuevas socias"
         ]
     )
 
@@ -41,7 +37,7 @@ def interfaz_directiva():
     elif menu == "Aplicar multas":
         pagina_multas()
     else:
-        pagina_registro_socias()   # 👈 NUEVA FUNCIÓN
+        pagina_registro_socias()
 
 
 # ---------------------------------------------------------
@@ -58,11 +54,9 @@ def pagina_asistencia():
 
     cursor = con.cursor()
 
-    # Fecha formateada correctamente
     fecha_raw = st.date_input("📅 Fecha de reunión", value=date.today())
     fecha = fecha_raw.strftime("%Y-%m-%d")
 
-    # Verificar si existe reunión
     cursor.execute("""
         SELECT Id_Reunion 
         FROM Reunion 
@@ -85,7 +79,6 @@ def pagina_asistencia():
             st.error("⚠ ERROR: No se pudo crear la reunión. Verifique Id_Grupo.")
             return
 
-    # Obtener socias
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
 
@@ -99,7 +92,6 @@ def pagina_asistencia():
 
     for idx, (id_socia, nombre) in enumerate(socias, start=1):
         c1, c2, c3 = st.columns([1, 3, 3])
-
         c1.write(idx)
         c2.write(nombre)
 
@@ -111,7 +103,6 @@ def pagina_asistencia():
 
         asistencia_registro[id_socia] = asistencia
 
-    # Guardar asistencia
     if st.button("💾 Guardar asistencia general"):
 
         try:
@@ -119,7 +110,6 @@ def pagina_asistencia():
 
                 estado = "Presente" if asistencia == "SI" else "Ausente"
 
-                # Verificar registro previo
                 cursor.execute("""
                     SELECT Id_Asistencia 
                     FROM Asistencia 
@@ -133,7 +123,6 @@ def pagina_asistencia():
                         SET Estado_asistencia = %s, Fecha = %s
                         WHERE Id_Reunion = %s AND Id_Socia = %s
                     """, (estado, fecha, id_reunion, id_socia))
-
                 else:
                     cursor.execute("""
                         INSERT INTO Asistencia (Id_Reunion, Id_Socia, Estado_asistencia, Fecha)
@@ -146,7 +135,6 @@ def pagina_asistencia():
         except Exception as e:
             st.error(f"Error al guardar asistencia: {e}")
 
-    # Mostrar resumen
     cursor.execute("""
         SELECT S.Nombre, A.Estado_asistencia
         FROM Asistencia A
@@ -290,7 +278,7 @@ def pagina_multas():
 
 
 # ---------------------------------------------------------
-# 🟩 NUEVA FUNCIÓN — REGISTRAR SOCIAS
+# 🟩 REGISTRO DE NUEVAS SOCIAS (CORREGIDO)
 # ---------------------------------------------------------
 def pagina_registro_socias():
 
@@ -305,8 +293,7 @@ def pagina_registro_socias():
 
     st.subheader("➕ Agregar una nueva socia")
 
-    nombre = st.text_input("Nombre completo de la socia")
-    estado = st.selectbox("Estado inicial", ["Activa", "Inactiva"])
+    nombre = st.text_input("Nombre completo de la socia (solo mujeres)")
 
     if st.button("💾 Registrar socia"):
 
@@ -316,9 +303,9 @@ def pagina_registro_socias():
 
         try:
             cursor.execute("""
-                INSERT INTO Socia (Nombre, Sexo, Estado)
-                VALUES (%s, 'F', %s)
-            """, (nombre, estado))
+                INSERT INTO Socia (Nombre, Sexo)
+                VALUES (%s, 'F')
+            """, (nombre,))
 
             con.commit()
             st.success(f"👩‍🦰 Nueva socia registrada correctamente: {nombre}")
@@ -329,18 +316,14 @@ def pagina_registro_socias():
 
     st.markdown("---")
 
-    # Mostrar socias registradas
     st.subheader("📋 Lista de socias registradas")
 
-    cursor.execute("SELECT Id_Socia, Nombre, Estado FROM Socia ORDER BY Id_Socia ASC")
+    # ❗ YA NO CONSULTAMOS LA COLUMNA ESTADO PORQUE NO EXISTE
+    cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     datos = cursor.fetchall()
 
     if datos:
-        df = pd.DataFrame(datos, columns=["ID", "Nombre", "Estado"])
+        df = pd.DataFrame(datos, columns=["ID", "Nombre"])
         st.dataframe(df)
     else:
         st.info("Aún no hay socias registradas.")
-
-       
-
-   
