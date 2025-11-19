@@ -3,11 +3,11 @@ import streamlit as st
 from modulos.login import login
 from modulos.directiva import interfaz_directiva
 from modulos.promotora import interfaz_promotora
-from modulos.administrador import interfaz_admin  # si existe
+# from modulos.administrador import interfaz_admin  # ← LO DESACTIVAMOS PARA EVITAR EL ERROR
 
 
 # -------------------------------
-# ESTADOS DE SESIÓN
+# ESTADO DE SESIÓN
 # -------------------------------
 
 if "sesion_iniciada" not in st.session_state:
@@ -23,29 +23,31 @@ if "rol" not in st.session_state:
 
 if st.session_state["sesion_iniciada"]:
 
-    rol = st.session_state["rol"]  # ← tal cual viene de BD
+    rol = st.session_state["rol"]
 
-    # DIRECTOR = panel de directiva
+    # DIRECTOR
     if rol == "Director":
         interfaz_directiva()
 
-    # PROMOTORA = panel de promotora
+    # PROMOTORA
     elif rol == "Promotora":
         interfaz_promotora()
 
-    # ADMINISTRADOR
+    # ADMINISTRADOR – dejar mientras no existe el módulo
     elif rol == "Administrador":
-        interfaz_admin()
+        st.title("🛠 Panel del Administrador (en construcción)")
+        st.info("Este panel aún no está disponible.")
 
     else:
-        st.error(f"❌ Rol no reconocido por el sistema: {rol}")
+        st.error(f"❌ Rol no reconocido: {rol}")
         st.session_state.clear()
         st.rerun()
 
-    # Cerrar sesión
+    # BOTÓN CERRAR SESIÓN
     if st.sidebar.button("Cerrar sesión"):
         st.session_state.clear()
         st.rerun()
 
 else:
     login()
+
