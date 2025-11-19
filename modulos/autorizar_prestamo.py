@@ -51,15 +51,8 @@ def autorizar_prestamo():
     # ======================================================
     if enviar:
 
-        # --------------------------------------------------
-        # 1. VERIFICAR SALDO DE CAJA
-        # --------------------------------------------------
-        cursor.execute("""
-            SELECT Id_Caja, Saldo_actual 
-            FROM Caja 
-            ORDER BY Id_Caja DESC 
-            LIMIT 1
-        """)
+        # 1. Verificar caja
+        cursor.execute("SELECT Id_Caja, Saldo_actual FROM Caja ORDER BY Id_Caja DESC LIMIT 1")
         caja = cursor.fetchone()
 
         if not caja:
@@ -76,9 +69,9 @@ def autorizar_prestamo():
 
         try:
             # --------------------------------------------------
-            # 2. REGISTRAR PRÉSTAMO
+            # 2. INSERTAR PRÉSTAMO
             # --------------------------------------------------
-            cursor.execute("""
+            cursor.execute(f"""
                 INSERT INTO Prestamo(
                     `Fecha del préstamo`,
                     `Monto prestado`,
@@ -101,65 +94,57 @@ def autorizar_prestamo():
                 cuotas,
                 saldo_pendiente,
                 "activo",
-                1,          
-                id_socia,   
-                id_caja    
+                1,
+                id_socia,
+                id_caja
             ))
 
             # --------------------------------------------------
             # 3. REGISTRAR EGRESO EN CAJA
             # --------------------------------------------------
             cursor.execute("""
-                INSERT INTO Caja(Concepto, Monto, Saldo_actual, Id_Grupo, Id_Tipo_movimiento, Fecha)
-                VALUES (%s,%s,%s,%s,%s,%s)
+                INSERT INTO Caja(Concepto, Monto, Saldo_actual, Id_Grupo, Id_Tipo_movimiento)
+                VALUES (%s,%s,%s,%s,%s)
             """,
             (
                 f"Préstamo otorgado a: {nombre_socia}",
                 -monto,
                 saldo_actual - monto,
-                1,                  
-                3,                  
-                fecha_prestamo
+                1,
+                3
             ))
 
             con.commit()
 
-            # ======================================================
-            # 4. RESUMEN DETALLADO DEL PRÉSTAMO
-            # ======================================================
-            interes_decimal = tasa_interes / 100
-            interes_dinero = monto * interes_decimal
-            total_pagar = monto + interes_dinero
-            cuota_mensual = total_pagar / plazo
-
             st.success("✅ Préstamo autorizado correctamente.")
+            st.info(f"Nuevo saldo en caja: ${saldo_actual - monto}")
 
-            # 🔵 BLOQUE DE RESUMEN
-            st.markdown("### 📘 **Resumen del préstamo**")
-            st.info(f"""
-**👩 Socia:** {nombre_socia}  
-**🆔 ID de la socia:** {id_socia}  
-**📅 Fecha del préstamo:** {fecha_prestamo}  
+            # ======================================================
+            # 📌 RESUMEN DETALLADO DEL PRÉSTAMO
+            # ======================================================
+            tasa_decimal = tasa_interes / 100
+            total_interes = monto * tasa_decimal
+            total_pagar = monto + total_interes
+            pago_por_cuota = total_pagar / cuotas
 
----
+            st.markdown("---")
+            st.subheader("📘 Resumen del préstamo")
 
-### 💵 **Detalles financieros**
-- **Monto prestado:** ${monto:.2f}  
-- **Tasa de interés:** {tasa_interes}%  
-- **Interés generado:** ${interes_dinero:.2f}  
-- **Total a pagar:** ${total_pagar:.2f}  
-- **Número de cuotas:** {plazo} meses  
-- **Cuota mensual:** ${cuota_mensual:.2f}  
+            st.write(f"""
+            **📅 Fecha del préstamo:** {fecha_prestamo}  
+            **👩 Id de la socia:** {id_socia}  
+            **👩 Nombre:** {nombre_socia}  
 
----
+            **💵 Monto prestado:** ${monto:,.2f}  
+            **📈 Tasa de interés:** {tasa_interes}%  
+            **💰 Interés total generado:** ${total_interes:,.2f}  
 
-### 🧮 Fórmulas usadas
-- Interés en dinero = Monto × (Tasa/100)  
-- Total a pagar = Monto + Interés  
-- Cuota mensual = Total a pagar ÷ Plazo
-""")
+            **🧮 Total a pagar:** ${total_pagar:,.2f}  
+            **📑 Número de cuotas:** {cuotas}  
+            **💸 Pago por cuota:** ${pago_por_cuota:,.2f}  
+            """)
 
-            st.success(f"💵 Nuevo saldo en caja: ${saldo_actual - monto}")
+            st.success("✔ Cálculo realizado correctamente.")
 
         except Exception as e:
             con.rollback()
