@@ -20,7 +20,7 @@ def autorizar_prestamo():
     # ======================================================
     # OBTENER SOCIAS
     # ======================================================
-    cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Nombre ASC")
+   cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
 
     if not socias:
