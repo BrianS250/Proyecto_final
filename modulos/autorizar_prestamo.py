@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-from modulos.config.conexion import obtener_conexion
+from modulos.conexion import obtener_conexion
+
 
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib.pagesizes import letter
