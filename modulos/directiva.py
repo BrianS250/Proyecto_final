@@ -340,3 +340,7 @@ def pagina_registro_socias():
         st.dataframe(df)
     else:
         st.info("Aún no hay socias registradas.")
+
+       
+
+   
