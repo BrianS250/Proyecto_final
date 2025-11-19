@@ -1,7 +1,7 @@
 import streamlit as st
 
 from modulos.login import login
-from modulos.directiva import interfaz_directiva
+from modulos.directiva import interfaz_directiva, pagina_reporte   # 👈 NUEVO
 from modulos.promotora import interfaz_promotora
 # from modulos.administrador import interfaz_admin  # ← LO DESACTIVAMOS PARA EVITAR EL ERROR
 
@@ -50,3 +50,4 @@ if st.session_state["sesion_iniciada"]:
 
 else:
     login()
+
