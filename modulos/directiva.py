@@ -5,7 +5,6 @@ from modulos.conexion import obtener_conexion
 from modulos.autorizar_prestamo import autorizar_prestamo   # << AGREGADO
 
 
-
 # ---------------------------------------------------------
 # 🟦 PANEL PRINCIPAL (SOLO DIRECTOR)
 # ---------------------------------------------------------
@@ -21,16 +20,23 @@ def interfaz_directiva():
     st.title("👩‍💼 Panel de la Directiva del Grupo")
     st.write("Administre reuniones, asistencia y multas.")
 
-    # 🔹 MOSTRAR SALDO ACTUAL DE CAJA (AGREGADO)
+    # 🔹 MOSTRAR SALDO ACTUAL DE CAJA (ÚNICA PARTE MODIFICADA)
     try:
         con = obtener_conexion()
         cursor = con.cursor()
-        cursor.execute("SELECT Saldo_actual FROM Caja ORDER BY Id_Caja DESC LIMIT 1")
+        cursor.execute("""
+            SELECT Saldo_actual 
+            FROM Caja 
+            ORDER BY Id_Caja DESC 
+            LIMIT 1
+        """)
         row = cursor.fetchone()
+
         if row:
-            st.info(f"💰 **Saldo actual de caja:** ${row[0]}")
+            saldo = row[0]
+            st.info(f"💰 Saldo actual de caja: **${saldo}**")
         else:
-            st.warning("⚠ Caja aún no tiene saldo asignado.")
+            st.warning("⚠ Caja aún no tiene saldo registrado.")
     except:
         st.warning("⚠ No se pudo obtener el saldo actual de caja.")
 
@@ -38,7 +44,7 @@ def interfaz_directiva():
         st.session_state.clear()
         st.rerun()
 
-    # << SOLO SE AGREGA ESTA LÍNEA EN EL MENU >>
+    # Menú
     menu = st.sidebar.radio(
         "Seleccione una sección:",
         [
@@ -49,14 +55,13 @@ def interfaz_directiva():
         ]
     )
 
-    # << SOLO SE AGREGA ESTE IF NUEVO >>
     if menu == "Registro de asistencia":
         pagina_asistencia()
     elif menu == "Aplicar multas":
         pagina_multas()
     elif menu == "Registrar nuevas socias":
         pagina_registro_socias()
-    elif menu == "Autorizar préstamo":       # << AGREGADO
+    elif menu == "Autorizar préstamo":
         autorizar_prestamo()
     else:
         st.error("Opción no válida")
@@ -242,9 +247,6 @@ def pagina_asistencia():
     else:
         st.info("No hay ingresos extraordinarios registrados hoy.")
 
-    # Fin de asistencia
-
-
 
 
 # ---------------------------------------------------------
@@ -367,7 +369,6 @@ def pagina_multas():
 
     else:
         st.info("No hay multas registradas con esos filtros.")
-
 
 
 
