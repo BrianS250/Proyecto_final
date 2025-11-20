@@ -3,16 +3,16 @@ from modulos.conexion import obtener_conexion
 
 def login():
 
-    # ============================
-    # FUENTE
-    # ============================
+    # ============================================
+    # TIPOGRAFÍA
+    # ============================================
     st.markdown("""
         <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
     """, unsafe_allow_html=True)
 
-    # ============================
-    # ESTILOS
-    # ============================
+    # ============================================
+    # ESTILOS PREMIUM
+    # ============================================
     st.markdown("""
     <style>
 
@@ -20,102 +20,138 @@ def login():
         font-family: 'Poppins', sans-serif !important;
     }
 
+    /* Fondo completo */
     .stApp {
-        background-color: #F7F9FC !important;
+        background: linear-gradient(180deg, #F5F6F2 0%, #EEEFEA 100%) !important;
+        padding: 0 !important;
     }
 
-    /* Contenedor general (lado izq + login derecha) */
-    .layout {
-        display: flex;
-        justify-content: center;
+    /* Contenedor general sin padding */
+    .block-container {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        max-width: 1600px !important;
+    }
+
+    /* GRID DOS COLUMNAS */
+    .two-col {
+        display: grid;
+        grid-template-columns: 50% 50%;
+        height: 100vh;
         align-items: center;
-        padding-top: 40px;
+        padding-left: 30px;
+        padding-right: 30px;
     }
 
-    /* Panel ilustración */
-    .left-box {
-        width: 45%;
-        text-align: center;
-        padding-right: 20px;
-    }
-
+    /* IMAGEN IZQUIERDA PREMIUM */
     .left-img {
         width: 90%;
-        border-radius: 20px;
-        box-shadow: 0px 10px 25px rgba(0,0,0,0.10);
-    }
-
-    /* Tarjeta login */
-    .login-card {
-        width: 380px;
-        background: white;
-        padding: 40px 45px 50px 45px;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
         border-radius: 22px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.12);
-        margin-left: 25px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.18);
+        transition: all 0.3s ease-in-out;
     }
 
-    /* Logo */
-    .logo-box {
-        text-align: center;
-        margin-bottom: 10px;
+    .left-img:hover {
+        transform: scale(1.01);
+        box-shadow: 0 25px 55px rgba(0,0,0,0.22);
     }
 
-    /* Título */
+    /* TARJETA LOGIN – estilo iPad */
+    .login-card {
+        background: #FFFFFF;
+        padding: 55px 60px 60px 60px;
+        border-radius: 26px;
+        width: 430px;
+        margin-left: auto;
+        margin-right: auto;
+        box-shadow: 0 18px 45px rgba(0,0,0,0.18);
+        transition: all 0.25s ease-in-out;
+        border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    .login-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 25px 60px rgba(0,0,0,0.22);
+    }
+
+    /* LOGO */
+    .logo {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        width: 190px;
+        margin-bottom: 12px;
+    }
+
+    /* TÍTULO */
     .title {
         text-align: center;
-        font-size: 28px;
+        font-size: 30px;
         font-weight: 600;
         color: #123A75;
-        margin-bottom: 25px;
+        margin-bottom: 30px;
     }
 
-    /* Inputs */
+    /* INPUTS */
     .stTextInput>div>div>input {
-        background-color: #FDFEFF !important;
-        border-radius: 10px !important;
-        border: 1px solid #D0D7E2 !important;
-        padding: 12px !important;
+        background-color: #FFFFFF !important;
+        border-radius: 12px !important;
+        border: 1px solid #C7D0DA !important;
+        padding: 14px !important;
         font-size: 15px !important;
+        transition: all 0.3s ease-in-out;
     }
 
-    /* Botón */
+    .stTextInput>div>div>input:focus {
+        border: 1px solid #6FB43F !important;
+        box-shadow: 0 0 0 3px rgba(111,180,63,0.20) !important;
+    }
+
+    /* BOTÓN VERDE CVX PREMIUM */
     .stButton>button {
         width: 100%;
         background-color: #6FB43F !important;
-        border-radius: 10px !important;
+        border-radius: 12px !important;
         border: none !important;
-        height: 48px;
+        height: 52px !important;
         color: white !important;
         font-size: 18px !important;
-        font-weight: 600;
-        margin-top: 15px;
+        font-weight: 600 !important;
+        margin-top: 18px;
+        box-shadow: 0 6px 14px rgba(111,180,63,0.25);
+        transition: all 0.2s ease-in-out;
     }
 
     .stButton>button:hover {
         background-color: #5A9634 !important;
-        transform: scale(1.02);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 22px rgba(111,180,63,0.32);
     }
 
     </style>
     """, unsafe_allow_html=True)
 
-    # ============================
-    # DISEÑO EN PANTALLA DIVIDIDA
-    # ============================
-    st.markdown("<div class='layout'>", unsafe_allow_html=True)
+    # ============================================
+    # LAYOUT REAL DEL MOCKUP PREMIUM
+    # ============================================
+    st.markdown("<div class='two-col'>", unsafe_allow_html=True)
 
-    # Panel ilustración
-    st.markdown("<div class='left-box'>", unsafe_allow_html=True)
-    st.image("modulos/imagenes/ilustracion.png", use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    # COLUMNA IZQUIERDA
+    st.markdown("""
+        <div>
+            <img src='modulos/imagenes/ilustracion.png' class='left-img'>
+        </div>
+    """, unsafe_allow_html=True)
 
-    # Panel login
+    # COLUMNA DERECHA – TARJETA LOGIN
+    st.markdown("<div>", unsafe_allow_html=True)
+
     st.markdown("<div class='login-card'>", unsafe_allow_html=True)
 
-    st.markdown("<div class='logo-box'>", unsafe_allow_html=True)
-    st.image("modulos/imagenes/logo.png", width=165)
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<img src='modulos/imagenes/logo.png' class='logo'>", unsafe_allow_html=True)
 
     st.markdown("<div class='title'>Inicio de Sesión</div>", unsafe_allow_html=True)
 
@@ -147,3 +183,4 @@ def login():
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
+    st.markdown("</div>", unsafe_allow_html=True)
