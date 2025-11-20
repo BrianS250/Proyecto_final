@@ -4,6 +4,15 @@ from modulos.directiva import interfaz_directiva
 from modulos.promotora import interfaz_promotora
 
 # ============================
+# DESACTIVAR SIDEBAR
+# ============================
+st.set_page_config(
+    page_title="Solidaridad CVX",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# ============================
 # ESTADO DE SESIÓN
 # ============================
 if "sesion_iniciada" not in st.session_state:
@@ -13,8 +22,9 @@ if "rol" not in st.session_state:
     st.session_state["rol"] = None
 
 # ============================
-# LÓGICA PRINCIPAL
+# SIN TÍTULOS, SIN SIDEBAR, SIN NADA EXTRA
 # ============================
+
 if st.session_state["sesion_iniciada"]:
 
     rol = st.session_state["rol"]
