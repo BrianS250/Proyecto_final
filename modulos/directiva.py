@@ -4,6 +4,11 @@ from datetime import date
 from modulos.conexion import obtener_conexion
 from modulos.autorizar_prestamo import autorizar_prestamo
 
+# 👇 AGREGA ESTO
+from modulos.pago_prestamo import pago_prestamo
+from modulos.ahorro import ahorro
+
+
 
 # ---------------------------------------------------------
 # 🟦 PANEL PRINCIPAL (SOLO DIRECTOR)
