@@ -1,30 +1,32 @@
 import streamlit as st
 from modulos.conexion import obtener_conexion
-import base64
 
 def login():
 
-    # ----------- ESTILOS CSS -----------
+    # =========================
+    # ESTILOS CORREGIDOS
+    # =========================
     st.markdown("""
         <style>
 
-        /* Fondo general oscuro */
-        body {
+        /* Streamlit usa un div .stApp, NO body */
+        .stApp {
             background-color: #0E1117 !important;
         }
 
-        /* Contenedor centrado */
+        /* Contenedor principal */
         .login-container {
             max-width: 380px;
             margin: auto;
-            margin-top: 60px;
+            margin-top: 80px;
             padding: 30px;
-            background: #1A1D23;
-            border-radius: 16px;
-            box-shadow: 0px 4px 12px rgba(0,0,0,0.4);
+            background: #1F232A;
+            border-radius: 18px;
+            border: solid 1px rgba(255,255,255,0.05);
+            box-shadow: 0px 4px 16px rgba(0,0,0,0.45);
         }
 
-        /* Texto */
+        /* Título */
         .login-title {
             text-align: center;
             font-size: 32px;
@@ -40,12 +42,12 @@ def login():
             margin-bottom: 20px;
         }
 
-        /* Input boxes */
-        .stTextInput > div > div > input {
-            background-color: #2C2F36;
-            color: #fff !important;
-            border-radius: 10px;
-            border: 1px solid #3A3F47;
+        /* Inputs */
+        .stTextInput input {
+            background-color: #2C3038 !important;
+            color: white !important;
+            border-radius: 10px !important;
+            border: 1px solid #454952 !important;
         }
 
         /* Botón */
@@ -53,28 +55,28 @@ def login():
             width: 100%;
             background-color: #FFD43B !important;
             color: black !important;
+            font-weight: 600;
             border-radius: 10px;
             height: 45px;
-            font-size: 17px;
-            font-weight: 600;
             border: none;
         }
 
         .stButton button:hover {
             background-color: #ffcc00 !important;
-            scale: 1.02;
         }
 
         label {
-            font-weight: 600 !important;
             color: #E5E5E5 !important;
+            font-weight: 600 !important;
         }
 
         </style>
     """, unsafe_allow_html=True)
 
 
-    # ----------- ESTRUCTURA DEL LOGIN -----------
+    # =========================
+    # CONTENIDO LOGIN
+    # =========================
     st.markdown('<div class="login-container">', unsafe_allow_html=True)
 
     st.markdown('<div class="login-title">🔒 Solidaridad CVX</div>', unsafe_allow_html=True)
@@ -84,35 +86,30 @@ def login():
     usuario = st.text_input("👤 Usuario")
     password = st.text_input("🔑 Contraseña", type="password")
 
-    login_btn = st.button("Iniciar sesión")
+    boton = st.button("Iniciar sesión")
 
-    st.markdown('</div>', unsafe_allow_html=True)  # Cerrar container
+    st.markdown('</div>', unsafe_allow_html=True)
 
-
-    # ----------- LÓGICA DEL LOGIN -----------
-    if login_btn:
+    # =========================
+    # LÓGICA
+    # =========================
+    if boton:
         con = obtener_conexion()
         cursor = con.cursor(dictionary=True)
 
-        try:
-            cursor.execute("""
-                SELECT Usuario, Rol
-                FROM Empleado
-                WHERE Usuario = %s AND Contra = %s
-            """, (usuario, password))
+        cursor.execute("""
+            SELECT Usuario, Rol
+            FROM Empleado
+            WHERE Usuario = %s AND Contra = %s
+        """, (usuario, password))
 
-            datos = cursor.fetchone()
+        datos = cursor.fetchone()
 
-            if datos:
-                st.session_state["usuario"] = datos["Usuario"]
-                st.session_state["rol"] = datos["Rol"]
-                st.session_state["sesion_iniciada"] = True
-
-                st.success("Inicio de sesión exitoso.")
-                st.rerun()
-
-            else:
-                st.error("❌ Credenciales incorrectas.")
-
-        except Exception as e:
-            st.error(f"Error en login: {e}")
+        if datos:
+            st.session_state["usuario"] = datos["Usuario"]
+            st.session_state["rol"] = datos["Rol"]
+            st.session_state["sesion_iniciada"] = True
+            st.success("Inicio de sesión exitoso.")
+            st.rerun()
+        else:
+            st.error("❌ Credenciales incorrectas.")
