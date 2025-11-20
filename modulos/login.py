@@ -1,63 +1,76 @@
 import streamlit as st
-from modulos.login import login
-from modulos.directiva import interfaz_directiva
-from modulos.promotora import interfaz_promotora
+from modulos.conexion import obtener_conexion
 
-# =====================================
-# CONFIGURACIÓN GLOBAL (MÁS IMPORTANTE)
-# =====================================
-st.set_page_config(
-    page_title="Solidaridad CVX",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
-
-# ELIMINA EL SIDEBAR COMPLETAMENTE
-hide_sidebar_style = """
-    <style>
-        [data-testid="stSidebar"] { display: none !important; }
-        [data-testid="stSidebarNav"] { display: none !important; }
-    </style>
-"""
-st.markdown(hide_sidebar_style, unsafe_allow_html=True)
-
-# EVITA CUALQUIER ESPACIO ARRIBA
-st.markdown("""
-    <style>
-        .block-container {
-            padding-top: 0rem !important;
-            margin-top: 0 !important;
+def login():
+    
+    # ===== ESTILO CSS =====
+    st.markdown("""
+        <style>
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 40px;
         }
-    </style>
-""", unsafe_allow_html=True)
+        .login-box {
+            background-color: #FFFFFF;
+            padding: 40px;
+            border-radius: 15px;
+            width: 420px;
+            box-shadow: 0px 4px 25px rgba(0, 0, 0, 0.1);
+        }
+        label {
+            font-weight: 600;
+            color: #1a2b49;
+        }
+        input {
+            color: #1a2b49 !important;
+        }
+        button[kind="primary"] {
+            background-color: #3E8E41 !important;
+            color: white !important;
+            border-radius: 8px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
-# =============================
-# ESTADO DE SESIÓN
-# =============================
-if "sesion_iniciada" not in st.session_state:
-    st.session_state["sesion_iniciada"] = False
+    # ===== DISEÑO =====
+    col1, col2 = st.columns([1, 1])
 
-if "rol" not in st.session_state:
-    st.session_state["rol"] = None
+    # Imagen izquierda
+    with col1:
+        st.image("modulos/imagenes/ilustracion.png", width=420)
 
+    # Formulario
+    with col2:
+        st.markdown('<div class="login-container"><div class="login-box">', unsafe_allow_html=True)
 
-# =============================
-# LÓGICA PRINCIPAL
-# =============================
-if st.session_state["sesion_iniciada"]:
+        st.image("modulos/imagenes/logo.png", width=140)
 
-    rol = st.session_state["rol"]
+        st.markdown("## Inicio de Sesión")
 
-    if rol == "Directora":
-        interfaz_directiva()
+        usuario = st.text_input("Usuario")
+        password = st.text_input("Contraseña", type="password")
 
-    elif rol == "Promotora":
-        interfaz_promotora()
+        if st.button("Iniciar sesión"):
+            con = obtener_conexion()
+            if con:
+                cursor = con.cursor(dictionary=True)
+                cursor.execute(
+                    "SELECT Usuario, Rol FROM Empleado WHERE Usuario=%s AND Contra=%s",
+                    (usuario, password)
+                )
+                datos = cursor.fetchone()
 
-    else:
-        st.error("Rol no reconocido.")
-        st.session_state.clear()
-        st.rerun()
+                if datos:
+                    st.session_state["sesion_iniciada"] = True
+                    st.session_state["usuario"] = datos["Usuario"]
+                    st.session_state["rol"] = datos["Rol"]
+                    st.success("Inicio de sesión exitoso.")
+                    st.rerun()
+                else:
+                    st.error("Credenciales incorrectas.")
+            else:
+                st.error("No se pudo conectar a la base de datos.")
 
-else:
-    login()
+        st.markdown("</div></div>", unsafe_allow_html=True)
