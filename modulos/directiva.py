@@ -69,7 +69,7 @@ def interfaz_directiva():
 
 
 # ---------------------------------------------------------
-# 🟩 REGISTRO DE ASISTENCIA
+# 🟩 REGISTRO DE ASISTENCIA + INGRESOS EXTRAORDINARIOS
 # ---------------------------------------------------------
 def pagina_asistencia():
 
@@ -212,7 +212,7 @@ def pagina_asistencia():
     st.markdown("---")
 
     # ---------------------------------------------------------
-    # INGRESOS EXTRAORDINARIOS
+    # 💰 INGRESOS EXTRAORDINARIOS (CORREGIDO + CAJA)
     # ---------------------------------------------------------
     st.header("💰 Ingresos extraordinarios de la reunión")
 
@@ -229,18 +229,45 @@ def pagina_asistencia():
 
     if st.button("➕ Registrar ingreso extraordinario"):
         try:
+            # 1️⃣ Guardar en tabla IngresosExtra
             cursor.execute("""
                 INSERT INTO IngresosExtra (Id_Reunion, Id_Socia, Tipo, Descripcion, Monto, Fecha)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (id_reunion, id_socia_aporta, tipo, descripcion, monto, fecha))
 
+            # 2️⃣ Obtener saldo actual de caja
+            cursor.execute("""
+                SELECT Saldo_actual
+                FROM Caja
+                ORDER BY Id_Caja DESC
+                LIMIT 1
+            """)
+            row = cursor.fetchone()
+            saldo_actual = row[0] if row else 0
+
+            nuevo_saldo = saldo_actual + float(monto)
+
+            # 3️⃣ Registrar movimiento en CAJA
+            cursor.execute("""
+                INSERT INTO Caja (Concepto, Monto, Saldo_actual, Id_Grupo, Id_Tipo_movimiento, Fecha)
+                VALUES (%s, %s, %s, %s, %s, CURRENT_DATE())
+            """,
+            (
+                f"Ingreso extraordinario – {socia_sel} ({tipo})",
+                monto,
+                nuevo_saldo,
+                1,
+                2  # INGRESO
+            ))
+
             con.commit()
-            st.success("Ingreso extraordinario registrado con éxito.")
+            st.success("Ingreso extraordinario registrado y agregado a caja.")
             st.rerun()
 
         except Exception as e:
             st.error(f"❌ Error al registrar ingreso: {e}")
 
+    # Mostrar ingresos del día
     cursor.execute("""
         SELECT S.Nombre, I.Tipo, I.Descripcion, I.Monto, I.Fecha
         FROM IngresosExtra I
@@ -371,7 +398,7 @@ def pagina_multas():
 
             if col7.button("Actualizar", key=f"btn_{id_multa}"):
 
-                # ✔ Si pasa de "A pagar" → "Pagada", se registra INGRESO EN CAJA
+                # ✔ Si pasa de "A pagar" → "Pagada", registrar INGRESO EN CAJA
                 if estado_actual == "A pagar" and nuevo_estado == "Pagada":
 
                     cursor.execute("""
