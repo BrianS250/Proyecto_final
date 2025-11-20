@@ -3,76 +3,96 @@ from modulos.conexion import obtener_conexion
 
 def login():
 
-    # ============================
-    #   ESTILO OSCURO PERSONALIZADO
-    # ============================
+    # CONFIGURACIÓN Y ESTILOS --------------------------------------------
     st.markdown("""
         <style>
+
+            /* Fondo oscuro general */
             body {
                 background-color: #0e1117 !important;
             }
 
+            /* Contenedor principal centrado */
+            .login-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                margin-top: 40px;
+            }
+
+            /* Caja del formulario */
             .login-box {
                 background-color: #161a23;
-                padding: 35px;
-                width: 420px;
-                margin: auto;
-                margin-top: 50px;
+                padding: 30px;
+                width: 90%;
+                max-width: 380px;
                 border-radius: 18px;
-                box-shadow: 0px 4px 15px rgba(0,0,0,0.4);
+                box-shadow: 0px 4px 20px rgba(0,0,0,0.6);
+                margin-top: 20px;
             }
 
-            label, h2, p, .stTextInput > div > div > input {
+            /* Logo centrado */
+            .logo-container img {
+                display: block;
+                margin-left: auto;
+                margin-right: auto;
+                width: 140px;
+                filter: brightness(0.90);
+            }
+
+            /* Título */
+            h2 {
+                text-align: center;
                 color: #e3e6ed !important;
-                font-size: 16px;
+                font-weight: 700;
             }
 
-            /* Input boxes */
+            /* Inputs */
             .stTextInput > div > div > input {
                 background-color: #1f2430 !important;
-                color: #e3e6ed !important;
-                border: 1px solid #3b4252 !important;
-                padding: 8px;
-                border-radius: 6px;
+                color: #ffffff !important;
+                border: 1px solid #444a55 !important;
+                border-radius: 8px;
+                padding: 10px;
             }
 
-            /* Button */
+            /* Quitar sombra superior extra */
+            .st-emotion-cache-1dp5vir {
+                display: none;
+            }
+
+            /* Botón verde */
             .stButton > button {
-                background-color: #2e7d32;
-                color: white;
-                font-weight: bold;
-                border-radius: 6px;
-                padding: 10px 20px;
                 width: 100%;
+                background-color: #2e7d32 !important;
+                color: white;
+                font-size: 16px;
+                font-weight: bold;
+                border-radius: 8px;
+                padding: 10px 0px;
                 border: none;
-                transition: 0.2s;
             }
 
             .stButton > button:hover {
-                background-color: #41a447;
-                color: white;
+                background-color: #3fa043 !important;
             }
 
-            /* Ocultar header y menú */
-            header, footer, .st-emotion-cache-18ni7ap {
-                visibility: hidden;
-            }
         </style>
     """, unsafe_allow_html=True)
 
-    # ============================
-    #   LOGO CENTRADO
-    # ============================
-    st.markdown("<div style='text-align:center; margin-top:20px;'>", unsafe_allow_html=True)
-    st.image("modulos/imagenes/logo.png", width=150)
+    # CONTENIDO -----------------------------------------------------
+    st.markdown("<div class='login-container'>", unsafe_allow_html=True)
+
+    # LOGO CENTRADO
+    st.markdown("<div class='logo-container'>", unsafe_allow_html=True)
+    st.image("modulos/imagenes/logo.png")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ============================
-    #   CONTENEDOR DEL LOGIN
-    # ============================
+    # CAJA DEL LOGIN
     st.markdown("<div class='login-box'>", unsafe_allow_html=True)
 
-    st.markdown("<h2 style='text-align:center;'>Inicio de Sesión</h2>", unsafe_allow_html=True)
+    st.markdown("<h2>Inicio de Sesión</h2>", unsafe_allow_html=True)
 
     usuario = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
@@ -80,9 +100,9 @@ def login():
     if st.button("Iniciar sesión"):
         con = obtener_conexion()
         if not con:
-            st.error("❌ No se pudo conectar a la base de datos.")
+            st.error("❌ No hay conexión con la base de datos")
             return
-
+        
         cursor = con.cursor(dictionary=True)
         cursor.execute("""
             SELECT Usuario, Rol 
@@ -100,4 +120,4 @@ def login():
         else:
             st.error("❌ Usuario o contraseña incorrectos.")
 
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div></div>", unsafe_allow_html=True)
