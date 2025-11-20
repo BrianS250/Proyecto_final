@@ -24,18 +24,19 @@ def pago_prestamo():
     # ---------------------------------------------------------
     # 2️⃣ PRÉSTAMOS ACTIVOS (CON NOMBRES CORRECTOS)
     # ---------------------------------------------------------
-    cursor.execute("""
-        SELECT 
-            `Id_Prestamo`,
-            `Fecha del préstamo`,
-            `Monto prestado`,
-            `Saldo pendiente`,
-            `Cuotas`,
-            `Tasa de interes`,
-            `Plazo`
-        FROM Prestamo
-        WHERE Id_Socia = %s AND `Estado del préstamo` = 'Activo'
-    """, (id_socia,))
+  cursor.execute("""
+    SELECT 
+        Id_Préstamo,
+        Fecha_del_préstamo,
+        Monto_prestado,
+        Saldo_pendiente,
+        Cuotas,
+        Tasa_de_interes,
+        Plazo
+    FROM Prestamo
+    WHERE Id_Socia = %s AND `Estado del préstamo` = 'Activo'
+""", (id_socia,))
+
 
     prestamos = cursor.fetchall()
 
