@@ -2,6 +2,9 @@ import streamlit as st
 from datetime import date
 from modulos.conexion import obtener_conexion
 
+# NUEVA CAJA POR REUNIÓN
+from modulos.caja import obtener_o_crear_reunion, registrar_movimiento
+
 
 def ahorro():
 
@@ -22,7 +25,7 @@ def ahorro():
     id_socia = dict_socias[socia_sel]
 
     # ---------------------------------------------------------
-    # 2️⃣ MOSTRAR ÚLTIMOS APORTES
+    # 2️⃣ HISTORIAL DE APORTES
     # ---------------------------------------------------------
     cursor.execute("""
         SELECT 
@@ -54,20 +57,24 @@ def ahorro():
         st.info("Esta socia aún no tiene aportes registrados.")
 
     # ---------------------------------------------------------
-    # 3️⃣ FORMULARIO DE NUEVO APORTE
+    # 3️⃣ NUEVO APORTE
     # ---------------------------------------------------------
     st.markdown("---")
     st.header("🧾 Registrar nuevo aporte")
 
-    fecha_aporte = st.date_input("📅 Fecha del aporte", value=date.today())
-    monto = st.number_input("💵 Monto del aporte ($)", min_value=1, step=1)
+    fecha_aporte_raw = st.date_input("📅 Fecha del aporte", value=date.today())
+    fecha_aporte = fecha_aporte_raw.strftime("%Y-%m-%d")
+
+    monto = st.number_input("💵 Monto del aporte ($)", min_value=1.00, step=1.00)
     tipo = st.selectbox("📌 Tipo de aporte", ["Ordinario", "Extraordinario"])
-    comprobante = st.text_input("📎 Comprobante digital (nombre de archivo o código)")
+    comprobante = st.text_input("📎 Comprobante digital")
 
     if st.button("💾 Registrar aporte"):
 
         try:
-            # Obtener saldo anterior
+            # ---------------------------------------------------------
+            # 4️⃣ OBTENER SALDO ANTERIOR
+            # ---------------------------------------------------------
             cursor.execute("""
                 SELECT `Saldo acumulado`
                 FROM Ahorro
@@ -75,19 +82,22 @@ def ahorro():
                 ORDER BY Id_Ahorro DESC
                 LIMIT 1
             """, (id_socia,))
+            
             row = cursor.fetchone()
             saldo_anterior = row[0] if row else 0
 
             nuevo_saldo = saldo_anterior + monto
 
-            # Insertar aporte en Ahorro
+            # ---------------------------------------------------------
+            # 5️⃣ INSERTAR EN TABLA AHORRO
+            # ---------------------------------------------------------
             cursor.execute("""
                 INSERT INTO Ahorro
                 (`Fecha del aporte`, `Monto del aporte`, `Tipo de aporte`,
-                 `Comprobante digital`, `Saldo acumulado`, Id_Socia, Id_Reunión, Id_Grupo, Id_Caja)
-                VALUES (%s, %s, %s, %s, %s, %s, 1, 1, 1)
+                 `Comprobante digital`, `Saldo acumulado`, Id_Socia)
+                VALUES (%s, %s, %s, %s, %s, %s)
             """, (
-                fecha_aporte.strftime("%Y-%m-%d"),
+                fecha_aporte,
                 monto,
                 tipo,
                 comprobante,
@@ -95,26 +105,19 @@ def ahorro():
                 id_socia
             ))
 
-            # Registrar en Caja
-            cursor.execute("""
-                SELECT Saldo_actual
-                FROM Caja
-                ORDER BY Id_Caja DESC
-                LIMIT 1
-            """)
-            row = cursor.fetchone()
-            saldo_caja = row[0] if row else 0
-
-            nuevo_saldo_caja = saldo_caja + monto
-
-            cursor.execute("""
-                INSERT INTO Caja
-                (Concepto, Monto, Saldo_actual, Id_Grupo, Id_Tipo_movimiento, Fecha)
-                VALUES (%s, %s, %s, 1, 2, CURRENT_DATE())
-            """, (f"Ahorro – Socia {id_socia}", monto, nuevo_saldo_caja))
+            # ---------------------------------------------------------
+            # 6️⃣ INSERTAR EN CAJA POR REUNIÓN (INGRESO)
+            # ---------------------------------------------------------
+            id_caja = obtener_o_crear_reunion(fecha_aporte)
+            registrar_movimiento(
+                id_caja,
+                "Ingreso",
+                f"Ahorro – Socia {id_socia}",
+                monto
+            )
 
             con.commit()
-            st.success("Aporte registrado correctamente.")
+            st.success("Aporte registrado y agregado a caja por reunión.")
             st.rerun()
 
         except Exception as e:
