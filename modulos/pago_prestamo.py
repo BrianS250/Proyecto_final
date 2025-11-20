@@ -35,7 +35,7 @@ def pago_prestamo():
             Tasa_de_interes,
             Plazo
         FROM Prestamo
-       WHERE Id_Socia = %s AND `Estado del préstamo` = 'Activo'
+       WHERE Id_Socia = %s AND Estado_del_prestamo = 'Activo'
     """, (id_socia,))
     prestamos = cursor.fetchall()
 
