@@ -1,7 +1,20 @@
 import streamlit as st
 from modulos.conexion import obtener_conexion
+import base64
+
+# ================================================
+# FUNCIÓN PARA CARGAR IMÁGENES BASE64
+# ================================================
+def load_base64(path):
+    with open(path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode()
+
 
 def login():
+
+    # Cargar imágenes en base64
+    logo = load_base64("modulos/imagenes/logo.png")
+    ilustracion = load_base64("modulos/imagenes/ilustracion.png")
 
     # ============================================
     # TIPOGRAFÍA
@@ -20,20 +33,17 @@ def login():
         font-family: 'Poppins', sans-serif !important;
     }
 
-    /* Fondo completo */
     .stApp {
         background: linear-gradient(180deg, #F5F6F2 0%, #EEEFEA 100%) !important;
         padding: 0 !important;
     }
 
-    /* Contenedor general sin padding */
     .block-container {
         padding-top: 0 !important;
         padding-bottom: 0 !important;
         max-width: 1600px !important;
     }
 
-    /* GRID DOS COLUMNAS */
     .two-col {
         display: grid;
         grid-template-columns: 50% 50%;
@@ -43,7 +53,6 @@ def login():
         padding-right: 30px;
     }
 
-    /* IMAGEN IZQUIERDA PREMIUM */
     .left-img {
         width: 90%;
         display: block;
@@ -59,7 +68,6 @@ def login():
         box-shadow: 0 25px 55px rgba(0,0,0,0.22);
     }
 
-    /* TARJETA LOGIN – estilo iPad */
     .login-card {
         background: #FFFFFF;
         padding: 55px 60px 60px 60px;
@@ -77,7 +85,6 @@ def login():
         box-shadow: 0 25px 60px rgba(0,0,0,0.22);
     }
 
-    /* LOGO */
     .logo {
         display: block;
         margin-left: auto;
@@ -86,7 +93,6 @@ def login():
         margin-bottom: 12px;
     }
 
-    /* TÍTULO */
     .title {
         text-align: center;
         font-size: 30px;
@@ -95,14 +101,13 @@ def login():
         margin-bottom: 30px;
     }
 
-    /* INPUTS */
     .stTextInput>div>div>input {
         background-color: #FFFFFF !important;
         border-radius: 12px !important;
         border: 1px solid #C7D0DA !important;
         padding: 14px !important;
         font-size: 15px !important;
-        transition: all 0.3s ease-in-out;
+        transition: all 0.3s ease-in-ou;
     }
 
     .stTextInput>div>div>input:focus {
@@ -110,7 +115,6 @@ def login():
         box-shadow: 0 0 0 3px rgba(111,180,63,0.20) !important;
     }
 
-    /* BOTÓN VERDE CVX PREMIUM */
     .stButton>button {
         width: 100%;
         background-color: #6FB43F !important;
@@ -140,18 +144,20 @@ def login():
     st.markdown("<div class='two-col'>", unsafe_allow_html=True)
 
     # COLUMNA IZQUIERDA
-    st.markdown("""
-        <div>
-            <img src='modulos/imagenes/ilustracion.png' class='left-img'>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        f"<img src='data:image/png;base64,{ilustracion}' class='left-img'>",
+        unsafe_allow_html=True
+    )
 
     # COLUMNA DERECHA – TARJETA LOGIN
     st.markdown("<div>", unsafe_allow_html=True)
 
     st.markdown("<div class='login-card'>", unsafe_allow_html=True)
 
-    st.markdown("<img src='modulos/imagenes/logo.png' class='logo'>", unsafe_allow_html=True)
+    st.markdown(
+        f"<img src='data:image/png;base64,{logo}' class='logo'>",
+        unsafe_allow_html=True
+    )
 
     st.markdown("<div class='title'>Inicio de Sesión</div>", unsafe_allow_html=True)
 
@@ -182,5 +188,4 @@ def login():
 
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
-
     st.markdown("</div>", unsafe_allow_html=True)
