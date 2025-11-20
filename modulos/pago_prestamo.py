@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 from datetime import date
 from modulos.conexion import obtener_conexion
 
@@ -73,7 +72,7 @@ def pago_prestamo():
     st.write(f"**Cuotas:** {cuotas}")
 
     # ---------------------------------------------------------
-    # 4️⃣ REGISTRO DEL PAGO
+    # 4️⃣ REGISTRO DE PAGO
     # ---------------------------------------------------------
     st.markdown("---")
     fecha_pago_raw = st.date_input("📅 Fecha del pago", value=date.today())
@@ -110,10 +109,10 @@ def pago_prestamo():
                 fecha_pago
             ))
 
-            id_caja_generado = cursor.lastrowid  # ← ESTE ES EL QUE VAMOS A USAR
+            id_caja = cursor.lastrowid
 
             # ---------------------------------------------------------
-            # 6️⃣ INSERTAR REGISTRO EN Pago del prestamo
+            # 6️⃣ REGISTRAR EL PAGO EN LA TABLA (NOMBRES CON ESPACIOS)
             # ---------------------------------------------------------
             nuevo_saldo_prestamo = saldo_pendiente - float(monto_abonado)
             if nuevo_saldo_prestamo < 0:
@@ -121,16 +120,16 @@ def pago_prestamo():
 
             cursor.execute("""
                 INSERT INTO `Pago del prestamo`
-                (Fecha_de_pago, Monto_abonado, Interes_pagado, Capital_pagado, Saldo_restante, Id_Préstamo, Id_Caja)
+                (`Fecha de pago`, `Monto abonado`, `Interés pagado`, `Capital pagado`, `Saldo restante`, Id_Préstamo, Id_Caja)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (
                 fecha_pago,
                 monto_abonado,
-                0,  # Interés pagado
-                0,  # Capital pagado
+                0,  # interés
+                0,  # capital
                 nuevo_saldo_prestamo,
                 id_prestamo,
-                id_caja_generado
+                id_caja
             ))
 
             # ---------------------------------------------------------
@@ -138,7 +137,7 @@ def pago_prestamo():
             # ---------------------------------------------------------
             cursor.execute("""
                 UPDATE Prestamo
-                SET Saldo_pendiente = %s,
+                SET `Saldo pendiente` = %s,
                     Estado_del_prestamo = CASE 
                         WHEN %s = 0 THEN 'cancelado' 
                         ELSE 'activo' 
@@ -147,7 +146,8 @@ def pago_prestamo():
             """, (nuevo_saldo_prestamo, nuevo_saldo_prestamo, id_prestamo))
 
             con.commit()
-            st.success("✅ Pago registrado y caja actualizada correctamente.")
+            st.success("✅ Pago registrado y CAJA actualizada.")
+
             st.rerun()
 
         except Exception as e:
