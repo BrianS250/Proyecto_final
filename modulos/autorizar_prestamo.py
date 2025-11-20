@@ -3,6 +3,9 @@ import pandas as pd
 from datetime import date
 from modulos.conexion import obtener_conexion
 
+# NUEVAS FUNCIONES DE CAJA POR REUNIÓN (OPCIÓN A)
+from modulos.caja import obtener_o_crear_reunion, registrar_movimiento
+
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -33,7 +36,8 @@ def autorizar_prestamo():
     # ======================================================
     with st.form("form_prestamo"):
 
-        fecha_prestamo = st.date_input("📅 Fecha del préstamo", date.today())
+        fecha_prestamo_raw = st.date_input("📅 Fecha del préstamo", date.today())
+        fecha_prestamo = fecha_prestamo_raw.strftime("%Y-%m-%d")
 
         socia_seleccionada = st.selectbox("👩 Socia que recibe el préstamo", list(lista_socias.keys()))
         id_socia = lista_socias[socia_seleccionada]
@@ -78,26 +82,21 @@ def autorizar_prestamo():
             return
 
         # ======================================================
-        # CAJA ACTUAL
+        # VERIFICAR FONDOS DE CAJA (OPCIÓN A)
         # ======================================================
-        cursor.execute("SELECT Id_Caja, Saldo_actual FROM Caja ORDER BY Id_Caja DESC LIMIT 1")
-        caja = cursor.fetchone()
+        cursor.execute("SELECT saldo_final FROM caja_reunion ORDER BY fecha DESC LIMIT 1")
+        row_caja = cursor.fetchone()
+        saldo_actual_caja = row_caja[0] if row_caja else 0
 
-        if not caja:
-            st.error("❌ No existe caja activa.")
-            return
-
-        id_caja, saldo_actual = caja
-
-        if monto > saldo_actual:
-            st.error(f"❌ Fondos insuficientes. Saldo disponible: ${saldo_actual}")
+        if monto > saldo_actual_caja:
+            st.error(f"❌ Fondos insuficientes en caja. Saldo disponible: ${saldo_actual_caja}")
             return
 
         saldo_pendiente = monto
 
         try:
             # --------------------------------------------------
-            # 1. REGISTRAR PRÉSTAMO
+            # 1. REGISTRAR PRÉSTAMO EN TABLA Prestamo
             # --------------------------------------------------
             cursor.execute("""
                 INSERT INTO Prestamo(
@@ -109,10 +108,9 @@ def autorizar_prestamo():
                     `Saldo pendiente`,
                     Estado_del_prestamo,
                     Id_Grupo,
-                    Id_Socia,
-                    Id_Caja
+                    Id_Socia
                 )
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
             """,
             (
                 fecha_prestamo,
@@ -123,39 +121,32 @@ def autorizar_prestamo():
                 saldo_pendiente,
                 "activo",
                 1,
-                id_socia,
-                id_caja
-            ))
-
-            # --------------------------------------------------
-            # 2. REGISTRAR EGRESO EN CAJA (SALIDA DE EFECTIVO)
-            # --------------------------------------------------
-            cursor.execute("""
-                INSERT INTO Caja(Concepto, Monto, Saldo_actual, Id_Grupo, Id_Tipo_movimiento, Fecha)
-                VALUES (%s, %s, %s, %s, %s, CURRENT_DATE())
-            """,
-            (
-                f"Préstamo otorgado a: {socia_seleccionada}",
-                -monto,
-                saldo_actual - monto,
-                1,
-                3
+                id_socia
             ))
 
             con.commit()
 
-            # ======================================================
-            # CÁLCULOS DEL PRÉSTAMO
-            # ======================================================
+            # --------------------------------------------------
+            # 2. REGISTRAR EGRESO EN CAJA POR REUNIÓN
+            # --------------------------------------------------
+            id_caja_reunion = obtener_o_crear_reunion(fecha_prestamo)
+
+            registrar_movimiento(
+                id_caja_reunion,
+                "Egreso",
+                f"Préstamo otorgado a: {socia_seleccionada}",
+                float(monto)
+            )
+
+            # --------------------------------------------------
+            # 3. MOSTRAR RESUMEN
+            # --------------------------------------------------
             interes_total = monto * (tasa_interes / 100)
             total_a_pagar = monto + interes_total
             pago_por_cuota = total_a_pagar / cuotas
 
             st.success("✔ Préstamo autorizado correctamente.")
 
-            # ======================================================
-            # MOSTRAR RESUMEN EN TABLA
-            # ======================================================
             st.subheader("📄 Resumen del préstamo autorizado")
 
             data = [
@@ -168,7 +159,7 @@ def autorizar_prestamo():
                 ["Total a pagar", f"${total_a_pagar:.2f}"],
                 ["Cuotas", cuotas],
                 ["Pago por cuota", f"${pago_por_cuota:.2f}"],
-                ["Fecha del préstamo", str(fecha_prestamo)],
+                ["Fecha del préstamo", fecha_prestamo],
                 ["Saldo en ahorros", f"${saldo_ahorro:.2f}"]
             ]
 
@@ -176,7 +167,7 @@ def autorizar_prestamo():
             st.table(df_resumen)
 
             # ======================================================
-            # DESCARGAR PDF
+            # 4. DESCARGAR PDF
             # ======================================================
             if st.button("📥 Descargar resumen en PDF"):
 
@@ -199,3 +190,7 @@ def autorizar_prestamo():
 
         except Exception as e:
             st.error(f"❌ Error al registrar el préstamo: {e}")
+
+        finally:
+            cursor.close()
+            con.close()
