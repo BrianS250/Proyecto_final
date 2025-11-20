@@ -11,7 +11,7 @@ def login():
     """, unsafe_allow_html=True)
 
     # ============================================
-    # ESTILOS GENERALES
+    # ESTILOS PREMIUM
     # ============================================
     st.markdown("""
     <style>
@@ -20,43 +20,61 @@ def login():
         font-family: 'Poppins', sans-serif !important;
     }
 
+    /* Fondo completo */
     .stApp {
-        background-color: #F5F5F0 !important; /* color crema del mockup */
+        background: linear-gradient(180deg, #F5F6F2 0%, #EEEFEA 100%) !important;
         padding: 0 !important;
     }
 
-    /* Ajustar ancho total */
+    /* Contenedor general sin padding */
     .block-container {
         padding-top: 0 !important;
         padding-bottom: 0 !important;
-        max-width: 1500px !important;
+        max-width: 1600px !important;
     }
 
-    /* LAYOUT DOS COLUMNAS */
+    /* GRID DOS COLUMNAS */
     .two-col {
         display: grid;
-        grid-template-columns: 55% 45%;
+        grid-template-columns: 50% 50%;
         height: 100vh;
         align-items: center;
+        padding-left: 30px;
+        padding-right: 30px;
     }
 
-    /* IMAGEN IZQUIERDA */
+    /* IMAGEN IZQUIERDA PREMIUM */
     .left-img {
-        width: 85%;
+        width: 90%;
+        display: block;
         margin-left: auto;
         margin-right: auto;
-        display: block;
+        border-radius: 22px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.18);
+        transition: all 0.3s ease-in-out;
     }
 
-    /* TARJETA LOGIN */
+    .left-img:hover {
+        transform: scale(1.01);
+        box-shadow: 0 25px 55px rgba(0,0,0,0.22);
+    }
+
+    /* TARJETA LOGIN – estilo iPad */
     .login-card {
-        background-color: white;
-        padding: 50px 55px;
-        border-radius: 20px;
-        width: 420px;
+        background: #FFFFFF;
+        padding: 55px 60px 60px 60px;
+        border-radius: 26px;
+        width: 430px;
         margin-left: auto;
         margin-right: auto;
-        box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+        box-shadow: 0 18px 45px rgba(0,0,0,0.18);
+        transition: all 0.25s ease-in-out;
+        border: 1px solid rgba(0,0,0,0.05);
+    }
+
+    .login-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 25px 60px rgba(0,0,0,0.22);
     }
 
     /* LOGO */
@@ -64,62 +82,71 @@ def login():
         display: block;
         margin-left: auto;
         margin-right: auto;
-        width: 180px;
-        margin-bottom: 10px;
+        width: 190px;
+        margin-bottom: 12px;
     }
 
-    /* TITULO */
+    /* TÍTULO */
     .title {
         text-align: center;
-        font-size: 28px;
+        font-size: 30px;
         font-weight: 600;
         color: #123A75;
-        margin-bottom: 25px;
+        margin-bottom: 30px;
     }
 
     /* INPUTS */
     .stTextInput>div>div>input {
         background-color: #FFFFFF !important;
-        border-radius: 10px !important;
-        border: 1px solid #D8D8D8 !important;
-        padding: 12px !important;
+        border-radius: 12px !important;
+        border: 1px solid #C7D0DA !important;
+        padding: 14px !important;
         font-size: 15px !important;
+        transition: all 0.3s ease-in-out;
     }
 
-    /* BOTON VERDE CVX */
+    .stTextInput>div>div>input:focus {
+        border: 1px solid #6FB43F !important;
+        box-shadow: 0 0 0 3px rgba(111,180,63,0.20) !important;
+    }
+
+    /* BOTÓN VERDE CVX PREMIUM */
     .stButton>button {
         width: 100%;
         background-color: #6FB43F !important;
-        border-radius: 10px !important;
-        border: none;
-        height: 50px;
+        border-radius: 12px !important;
+        border: none !important;
+        height: 52px !important;
+        color: white !important;
         font-size: 18px !important;
         font-weight: 600 !important;
-        color: white !important;
-        margin-top: 14px;
+        margin-top: 18px;
+        box-shadow: 0 6px 14px rgba(111,180,63,0.25);
+        transition: all 0.2s ease-in-out;
     }
 
     .stButton>button:hover {
         background-color: #5A9634 !important;
-        transform: scale(1.02);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 22px rgba(111,180,63,0.32);
     }
 
     </style>
     """, unsafe_allow_html=True)
 
     # ============================================
-    # LAYOUT EXACTO DEL MOCKUP
+    # LAYOUT REAL DEL MOCKUP PREMIUM
     # ============================================
     st.markdown("<div class='two-col'>", unsafe_allow_html=True)
 
-    # Columna izquierda - ilustración
+    # COLUMNA IZQUIERDA
     st.markdown("""
         <div>
             <img src='modulos/imagenes/ilustracion.png' class='left-img'>
         </div>
     """, unsafe_allow_html=True)
 
-    # Columna derecha - tarjeta login
+    # COLUMNA DERECHA – TARJETA LOGIN
     st.markdown("<div>", unsafe_allow_html=True)
 
     st.markdown("<div class='login-card'>", unsafe_allow_html=True)
@@ -132,25 +159,26 @@ def login():
     password = st.text_input("Contraseña", type="password")
 
     if st.button("Iniciar sesión"):
-        con = obtener_conexion()
-        cursor = con.cursor(dictionary=True)
+        try:
+            con = obtener_conexion()
+            cursor = con.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT Usuario, Rol
+                FROM Empleado
+                WHERE Usuario = %s AND Contra = %s
+            """, (usuario, password))
+            datos = cursor.fetchone()
 
-        cursor.execute("""
-            SELECT Usuario, Rol
-            FROM Empleado
-            WHERE Usuario = %s AND Contra = %s
-        """, (usuario, password))
-
-        datos = cursor.fetchone()
-
-        if datos:
-            st.session_state["usuario"] = datos["Usuario"]
-            st.session_state["rol"] = datos["Rol"]
-            st.session_state["sesion_iniciada"] = True
-            st.success("Bienvenido ✔")
-            st.rerun()
-        else:
-            st.error("❌ Usuario o contraseña incorrectos.")
+            if datos:
+                st.session_state["usuario"] = datos["Usuario"]
+                st.session_state["rol"] = datos["Rol"]
+                st.session_state["sesion_iniciada"] = True
+                st.success("Bienvenido ✔")
+                st.rerun()
+            else:
+                st.error("❌ Usuario o contraseña incorrectos.")
+        except Exception as e:
+            st.error(f"Error en login: {e}")
 
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
