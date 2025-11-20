@@ -1,7 +1,7 @@
 import streamlit as st
-import pandas as pd
 from datetime import date
 from modulos.conexion import obtener_conexion
+
 
 def pago_prestamo():
 
@@ -22,7 +22,7 @@ def pago_prestamo():
     id_socia = dict_socias[socia_sel]
 
     # ---------------------------------------------------------
-    # 2️⃣ BUSCAR PRÉSTAMOS ACTIVOS
+    # 2️⃣ PRÉSTAMOS ACTIVOS
     # ---------------------------------------------------------
     cursor.execute("""
         SELECT 
@@ -36,15 +36,13 @@ def pago_prestamo():
         FROM Prestamo
         WHERE Id_Socia = %s AND TRIM(Estado_del_prestamo) = 'activo'
     """, (id_socia,))
+
     prestamos = cursor.fetchall()
 
     if not prestamos:
         st.info("Esta socia no tiene préstamos activos.")
         return
 
-    # ---------------------------------------------------------
-    # 3️⃣ SELECT DEL PRÉSTAMO
-    # ---------------------------------------------------------
     opciones = {
         f"ID {p[0]} | Prestado: ${p[2]} | Saldo: ${p[3]}": p[0] for p in prestamos
     }
@@ -53,13 +51,13 @@ def pago_prestamo():
     id_prestamo = opciones[prestamo_sel]
 
     # ---------------------------------------------------------
-    # 4️⃣ MOSTRAR DATOS DEL PRÉSTAMO
+    # 3️⃣ Obtener datos del préstamo seleccionado
     # ---------------------------------------------------------
     cursor.execute("""
         SELECT 
-            `Fecha del préstamo`, 
-            `Monto prestado`, 
-            `Saldo pendiente`, 
+            `Fecha del préstamo`,
+            `Monto prestado`,
+            `Saldo pendiente`,
             `Tasa de interes`,
             Plazo,
             Cuotas
@@ -79,7 +77,7 @@ def pago_prestamo():
     st.write(f"**Cuotas:** {cuotas}")
 
     # ---------------------------------------------------------
-    # 5️⃣ FORMULARIO DE PAGO
+    # 4️⃣ REGISTRAR PAGO
     # ---------------------------------------------------------
     st.markdown("---")
     st.header("🧾 Registrar pago")
@@ -92,19 +90,23 @@ def pago_prestamo():
     if st.button("💾 Registrar pago"):
 
         try:
-            # REGISTRAR PAGO EN LA TABLA (NOMBRE EXACTO)
-            cursor.execute(f"""
-                INSERT INTO `Pago del prestamo`
-                (Fecha_de_pago, Monto_abonado, Interes_pagado, Capital_pagado, Saldo_restante, Id_Prestamo)
-                VALUES (%s, %s, 0, 0, 0, %s)
-            """, (fecha_pago, monto_abonado, id_prestamo))
-
-            # CALCULAR NUEVO SALDO
             nuevo_saldo = saldo_pendiente - float(monto_abonado)
             if nuevo_saldo < 0:
                 nuevo_saldo = 0
 
-            # ACTUALIZAR SALDO
+            # ---------------------------------------------------------
+            # 5️⃣ INSERTAR EN PAGO DEL PRESTAMO  (Nombres exactos)
+            # ---------------------------------------------------------
+            cursor.execute("""
+                INSERT INTO `Pago del prestamo`
+                (`Fecha de pago`, `Monto abonado`, `Interés pagado`, `Capital pagado`,
+                 `Saldo restante`, `Id_Préstamo`, Id_Caja)
+                VALUES (%s, %s, 0, 0, %s, %s, 1)
+            """, (fecha_pago, monto_abonado, nuevo_saldo, id_prestamo))
+
+            # ---------------------------------------------------------
+            # 6️⃣ ACTUALIZAR PRÉSTAMO
+            # ---------------------------------------------------------
             cursor.execute("""
                 UPDATE Prestamo
                 SET `Saldo pendiente` = %s,
@@ -112,31 +114,8 @@ def pago_prestamo():
                 WHERE Id_Préstamo = %s
             """, (nuevo_saldo, nuevo_saldo, id_prestamo))
 
-            # ACTUALIZAR CAJA
-            cursor.execute("""
-                SELECT Saldo_actual
-                FROM Caja
-                ORDER BY Id_Caja DESC
-                LIMIT 1
-            """)
-            row = cursor.fetchone()
-            saldo_actual = row[0] if row else 0
-
-            nuevo_saldo_caja = saldo_actual + float(monto_abonado)
-
-            cursor.execute("""
-                INSERT INTO Caja 
-                (Concepto, Monto, Saldo_actual, Id_Grupo, Id_Tipo_movimiento, Fecha, Id_Prestamo)
-                VALUES (%s, %s, %s, 1, 2, CURRENT_DATE(), %s)
-            """, (
-                f"Pago de préstamo – Socia {id_socia}",
-                monto_abonado,
-                nuevo_saldo_caja,
-                id_prestamo
-            ))
-
             con.commit()
-            st.success("Pago registrado correctamente.")
+            st.success("✅ Pago registrado correctamente.")
             st.rerun()
 
         except Exception as e:
