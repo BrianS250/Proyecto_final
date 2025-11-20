@@ -233,12 +233,15 @@ def pagina_asistencia():
     # ---------------------------------------------------------
     st.header("💰 Ingresos extraordinarios de la reunión")
 
-    cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
-    lista_socias = cursor.fetchall()
-    dict_socias = {nombre: id_socia for id_socia, nombre in lista_socias}
+   cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
+lista_socias = cursor.fetchall()
 
-    socia_sel = st.selectbox("👩 Socia que aporta:", dict_socias.keys())
-    id_socia_aporta = dict_socias[socia_sel]
+# 🔥 Mostrar ID + Nombre en el select
+dict_socias = {f"{id_socia} - {nombre}": id_socia for id_socia, nombre in lista_socias}
+
+socia_sel = st.selectbox("👩 Socia que aporta:", list(dict_socias.keys()))
+id_socia_aporta = dict_socias[socia_sel]
+
 
     tipo = st.selectbox("Tipo de ingreso:", ["Rifa", "Donación", "Actividad", "Otro"])
     descripcion = st.text_input("Descripción del ingreso (opcional)")
