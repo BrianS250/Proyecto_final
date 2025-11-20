@@ -1,42 +1,45 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
+
 from modulos.conexion import obtener_conexion
 
-# MÓDULOS INTERNOS
+# MÓDULOS EXTERNOS
 from modulos.autorizar_prestamo import autorizar_prestamo
 from modulos.pago_prestamo import pago_prestamo
 from modulos.ahorro import ahorro
-from modulos.reporte_caja import reporte_caja      # Reporte de Caja por Reunión
-from modulos.caja import obtener_saldo_actual      # Saldo actual según caja_reunion
+from modulos.reporte_caja import reporte_caja
+
+# MÓDULO DE CAJA POR REUNIÓN (OPCIÓN A)
+from modulos.caja import obtener_o_crear_reunion, registrar_movimiento, obtener_saldo_actual
+
 
 
 # ============================================================
-# PANEL PRINCIPAL DIRECTIVA
+# PANEL PRINCIPAL
 # ============================================================
 def interfaz_directiva():
 
     rol = st.session_state.get("rol", "")
 
-    # Validación de rol
+    # Seguridad de acceso
     if rol != "Director":
         st.title("Acceso denegado")
         st.warning("Solo el Director puede acceder a esta sección.")
         return
 
-    # Título
     st.title("👩‍💼 Panel de la Directiva del Grupo")
 
-    # ------------------------------------------------------
+    # ---------------------------------------------------------
     # MOSTRAR SALDO ACTUAL DE CAJA (Opción A)
-    # ------------------------------------------------------
+    # ---------------------------------------------------------
     try:
         saldo = obtener_saldo_actual()
         st.info(f"💰 Saldo actual de caja: **${saldo}**")
     except:
-        st.warning("⚠ Error al obtener el saldo de Caja (Opción A).")
+        st.warning("⚠ Error al obtener el saldo de caja.")
 
-    # Botón cerrar sesión
+    # Cerrar sesión
     if st.sidebar.button("🔒 Cerrar sesión"):
         st.session_state.clear()
         st.rerun()
@@ -55,7 +58,6 @@ def interfaz_directiva():
         ]
     )
 
-    # ENRUTAMIENTO DE PÁGINAS
     if menu == "Registro de asistencia":
         pagina_asistencia()
 
@@ -80,7 +82,7 @@ def interfaz_directiva():
 
 
 # ============================================================
-# REGISTRO DE ASISTENCIA + INGRESOS EXTRAORDINARIOS
+# ASISTENCIA + INGRESOS EXTRAORDINARIOS
 # ============================================================
 def pagina_asistencia():
 
@@ -89,15 +91,13 @@ def pagina_asistencia():
     con = obtener_conexion()
     cursor = con.cursor()
 
-    # Fecha de reunión
     fecha_raw = st.date_input("📅 Fecha de la reunión", date.today())
     fecha = fecha_raw.strftime("%Y-%m-%d")
 
-    # Buscar reunión
+    # Verificar si existe la reunión
     cursor.execute("SELECT Id_Reunion FROM Reunion WHERE Fecha_reunion=%s", (fecha,))
     row = cursor.fetchone()
 
-    # Crear reunión si no existe
     if row:
         id_reunion = row[0]
     else:
@@ -107,34 +107,32 @@ def pagina_asistencia():
         """, (fecha,))
         con.commit()
         id_reunion = cursor.lastrowid
-        st.success(f"Reunión creada correctamente (ID {id_reunion}).")
+        st.success(f"Reunión creada (ID {id_reunion}).")
 
     # Lista de socias
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
 
     st.subheader("Lista de asistencia")
-    asistencia_registro = {}
+    registro = {}
 
     for id_socia, nombre in socias:
-        asistencia = st.selectbox(
+        estado = st.selectbox(
             f"{id_socia} - {nombre}",
             ["SI", "NO"],
             key=f"asis_{id_socia}"
         )
-        asistencia_registro[id_socia] = asistencia
+        registro[id_socia] = estado
 
-    # Guardar asistencia
     if st.button("💾 Guardar asistencia"):
-        for id_socia, asis in asistencia_registro.items():
-            estado = "Presente" if asis == "SI" else "Ausente"
+        for id_socia, valor in registro.items():
+            est = "Presente" if valor == "SI" else "Ausente"
 
             cursor.execute("""
                 SELECT Id_Asistencia
                 FROM Asistencia
                 WHERE Id_Reunion=%s AND Id_Socia=%s
             """, (id_reunion, id_socia))
-
             existe = cursor.fetchone()
 
             if existe:
@@ -142,31 +140,28 @@ def pagina_asistencia():
                     UPDATE Asistencia 
                     SET Estado_asistencia=%s, Fecha=%s
                     WHERE Id_Reunion=%s AND Id_Socia=%s
-                """, (estado, fecha, id_reunion, id_socia))
+                """, (est, fecha, id_reunion, id_socia))
             else:
                 cursor.execute("""
                     INSERT INTO Asistencia(Id_Reunion,Id_Socia,Estado_asistencia,Fecha)
                     VALUES(%s,%s,%s,%s)
-                """, (id_reunion, id_socia, estado, fecha))
+                """, (id_reunion, id_socia, est, fecha))
 
         con.commit()
-        st.success("Asistencia actualizada.")
+        st.success("Asistencia registrada.")
 
-    # Mostrar registro
+    # Mostrar asistencia
     cursor.execute("""
         SELECT S.Nombre, A.Estado_asistencia
         FROM Asistencia A
         JOIN Socia S ON S.Id_Socia=A.Id_Socia
         WHERE A.Id_Reunion=%s
     """, (id_reunion,))
-    registros = cursor.fetchall()
+    datos = cursor.fetchall()
 
-    if registros:
-        df = pd.DataFrame(registros, columns=["Socia", "Asistencia"])
+    if datos:
+        df = pd.DataFrame(datos, columns=["Socia", "Asistencia"])
         st.dataframe(df)
-
-        total_presentes = df[df.Asistencia == "Presente"].shape[0]
-        st.success(f"Total presentes: {total_presentes}")
 
     st.markdown("---")
 
@@ -176,15 +171,15 @@ def pagina_asistencia():
     st.header("💰 Ingresos extraordinarios")
 
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
-    lista_socias = cursor.fetchall()
-    opc_socias = {nombre: id_s for id_s, nombre in lista_socias}
+    socias = cursor.fetchall()
+    opciones = {nombre: id_s for id_s, nombre in socias}
 
-    socia_sel = st.selectbox("Socia que aporta:", opc_socias.keys())
-    id_socia = opc_socias[socia_sel]
+    socia_sel = st.selectbox("Socia:", opciones.keys())
+    id_socia = opciones[socia_sel]
 
     tipo = st.selectbox("Tipo", ["Rifa", "Donación", "Actividad", "Otro"])
     descripcion = st.text_input("Descripción")
-    monto = st.number_input("Monto ($)", min_value=0.01, step=0.25)
+    monto = st.number_input("Monto ($)", min_value=0.25, step=0.25)
 
     if st.button("➕ Registrar ingreso extraordinario"):
 
@@ -194,7 +189,12 @@ def pagina_asistencia():
         """, (id_reunion, id_socia, tipo, descripcion, monto, fecha))
 
         con.commit()
-        st.success("Ingreso extraordinario registrado.")
+
+        # Registrar movimiento en caja_reunion
+        id_caja = obtener_o_crear_reunion(fecha)
+        registrar_movimiento(id_caja, "Ingreso", f"Ingreso Extra – {tipo}", monto)
+
+        st.success("Ingreso extraordinario registrado y sumado a caja.")
         st.rerun()
 
 
@@ -211,19 +211,19 @@ def pagina_multas():
 
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
-    lista_socias = {nombre: id_s for id_s, nombre in socias}
+    opciones = {nombre: id_s for id_s, nombre in socias}
 
-    socia_sel = st.selectbox("Socia:", lista_socias.keys())
-    id_socia = lista_socias[socia_sel]
+    socia_sel = st.selectbox("Socia:", opciones.keys())
+    id_socia = opciones[socia_sel]
 
     cursor.execute("SELECT Id_Tipo_multa, `Tipo de multa` FROM `Tipo de multa`")
     tipos = cursor.fetchall()
     lista_tipos = {nombre: id_t for id_t, nombre in tipos}
 
     tipo_sel = st.selectbox("Tipo:", lista_tipos.keys())
-    id_tipo_multa = lista_tipos[tipo_sel]
+    id_tipo = lista_tipos[tipo_sel]
 
-    monto = st.number_input("Monto ($)", min_value=0.01, step=0.25)
+    monto = st.number_input("Monto ($)", min_value=0.25, step=0.25)
     fecha_raw = st.date_input("Fecha", date.today())
     fecha = fecha_raw.strftime("%Y-%m-%d")
     estado = st.selectbox("Estado:", ["A pagar", "Pagada"])
@@ -232,11 +232,61 @@ def pagina_multas():
         cursor.execute("""
             INSERT INTO Multa(Monto,Fecha_aplicacion,Estado,Id_Tipo_multa,Id_Socia)
             VALUES(%s,%s,%s,%s,%s)
-        """, (monto, fecha, estado, id_tipo_multa, id_socia))
+        """, (monto, fecha, estado, id_tipo, id_socia))
 
         con.commit()
         st.success("Multa registrada.")
         st.rerun()
+
+    st.markdown("---")
+    st.subheader("📋 Multas registradas")
+
+    cursor.execute("""
+        SELECT M.Id_Multa, S.Nombre, T.`Tipo de multa`, 
+               M.Monto, M.Estado, M.Fecha_aplicacion
+        FROM Multa M
+        JOIN Socia S ON S.Id_Socia=M.Id_Socia
+        JOIN `Tipo de multa` T ON T.Id_Tipo_multa=M.Id_Tipo_multa
+        ORDER BY M.Id_Multa DESC
+    """)
+    multas = cursor.fetchall()
+
+    for mid, nombre, tipo, monto, estado_actual, fecha_m in multas:
+
+        c1, c2, c3, c4, c5, c6 = st.columns([1,3,3,2,2,2])
+
+        c1.write(mid)
+        c2.write(nombre)
+        c3.write(tipo)
+        c4.write(f"${monto}")
+
+        nuevo_estado = c5.selectbox(
+            " ",
+            ["A pagar", "Pagada"],
+            index=0 if estado_actual == "A pagar" else 1,
+            key=f"upd{mid}"
+        )
+
+        if c6.button("Actualizar", key=f"btn{mid}"):
+
+            # Si pasa de A pagar → Pagada → SE SUMA A CAJA
+            if estado_actual == "A pagar" and nuevo_estado == "Pagada":
+
+                id_caja = obtener_o_crear_reunion(fecha_m)
+                registrar_movimiento(
+                    id_caja,
+                    "Ingreso",
+                    f"Pago de multa – {nombre}",
+                    monto
+                )
+
+            cursor.execute("""
+                UPDATE Multa SET Estado=%s WHERE Id_Multa=%s
+            """, (nuevo_estado, mid))
+
+            con.commit()
+            st.success(f"Multa {mid} actualizada.")
+            st.rerun()
 
 
 
@@ -245,7 +295,7 @@ def pagina_multas():
 # ============================================================
 def pagina_registro_socias():
 
-    st.header("👩‍🦰 Registro de socias")
+    st.header("👩‍🦰 Registro de nuevas socias")
 
     con = obtener_conexion()
     cursor = con.cursor()
