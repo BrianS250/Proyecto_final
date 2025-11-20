@@ -212,7 +212,7 @@ def pagina_asistencia():
     st.markdown("---")
 
     # ---------------------------------------------------------
-    # INGRESOS EXTRAORDINARIOS (CORREGIDO)
+    # INGRESOS EXTRAORDINARIOS
     # ---------------------------------------------------------
     st.header("💰 Ingresos extraordinarios de la reunión")
 
@@ -229,40 +229,13 @@ def pagina_asistencia():
 
     if st.button("➕ Registrar ingreso extraordinario"):
         try:
-            # 1️⃣ Registrar ingreso en IngresosExtra
             cursor.execute("""
                 INSERT INTO IngresosExtra (Id_Reunion, Id_Socia, Tipo, Descripcion, Monto, Fecha)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (id_reunion, id_socia_aporta, tipo, descripcion, monto, fecha))
 
-            # 2️⃣ Obtener saldo actual
-            cursor.execute("""
-                SELECT Saldo_actual
-                FROM Caja
-                ORDER BY Id_Caja DESC
-                LIMIT 1
-            """)
-            row = cursor.fetchone()
-            saldo_actual = row[0] if row else 0
-
-            # 3️⃣ Nuevo saldo
-            nuevo_saldo = saldo_actual + float(monto)
-
-            # 4️⃣ Registrar movimiento en CAJA
-            cursor.execute("""
-                INSERT INTO Caja (Concepto, Monto, Saldo_actual, Id_Grupo, Id_Tipo_movimiento, Fecha)
-                VALUES (%s, %s, %s, %s, %s, CURRENT_DATE())
-            """,
-            (
-                f"Ingreso extraordinario – {socia_sel} ({tipo})",
-                monto,
-                nuevo_saldo,
-                1,
-                2   # INGRESO
-            ))
-
             con.commit()
-            st.success("Ingreso extraordinario registrado y agregado a caja.")
+            st.success("Ingreso extraordinario registrado con éxito.")
             st.rerun()
 
         except Exception as e:
@@ -323,7 +296,6 @@ def pagina_multas():
                 INSERT INTO Multa (Monto, Fecha_aplicacion, Estado, Id_Tipo_multa, Id_Socia)
                 VALUES (%s, %s, %s, %s, %s)
             """, (monto, fecha, estado, id_tipo_multa, id_socia))
-
             con.commit()
             st.success("Multa registrada correctamente.")
             st.rerun()
@@ -379,14 +351,14 @@ def pagina_multas():
         cols[6].write("**Acción**")
 
         for row in multas:
-            id_multa, socia, tipo, monto_multa, estado_actual, fecha_mult = row
+            id_multa, socia, tipo, monto, estado_actual, fecha_mult = row
 
             col1, col2, col3, col4, col5, col6, col7 = st.columns([1,3,3,2,2,2,2])
 
             col1.write(id_multa)
             col2.write(socia)
             col3.write(tipo)
-            col4.write(f"${monto_multa}")
+            col4.write(f"${monto}")
 
             nuevo_estado = col5.selectbox(
                 "",
@@ -411,7 +383,7 @@ def pagina_multas():
                     row_saldo = cursor.fetchone()
                     saldo_actual = row_saldo[0] if row_saldo else 0
 
-                    nuevo_saldo = saldo_actual + float(monto_multa)
+                    nuevo_saldo = saldo_actual + float(monto)
 
                     cursor.execute("""
                         INSERT INTO Caja (Concepto, Monto, Saldo_actual, Id_Grupo, Id_Tipo_movimiento, Id_Multa, Fecha)
@@ -419,7 +391,7 @@ def pagina_multas():
                     """,
                     (
                         f"Pago de multa – {socia}",
-                        monto_multa,
+                        monto,
                         nuevo_saldo,
                         1,
                         2,      # INGRESO
