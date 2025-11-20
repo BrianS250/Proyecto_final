@@ -1,4 +1,5 @@
 import streamlit as st
+st.set_page_config(page_title="Sistema Solidaridad CVX", layout="wide")
 
 from modulos.login import login
 from modulos.directiva import interfaz_directiva
