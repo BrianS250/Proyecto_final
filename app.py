@@ -1,38 +1,55 @@
 import streamlit as st
-from modulos.conexion import obtener_conexion
 
-def login():
-    st.title("🔐 Inicio de Sesión")
-    st.write("Ingrese sus credenciales para acceder al sistema.")
+from modulos.login import login
+from modulos.directiva import interfaz_directiva
+from modulos.promotora import interfaz_promotora
+# from modulos.administrador import interfaz_admin  # ← LO DESACTIVAMOS PARA EVITAR EL ERROR
 
-    usuario = st.text_input("Usuario")
-    password = st.text_input("Contraseña", type="password")
 
-    if st.button("Iniciar sesión"):
+# -------------------------------
+# ESTADO DE SESIÓN
+# -------------------------------
 
-        con = obtener_conexion()
-        cursor = con.cursor(dictionary=True)
+if "sesion_iniciada" not in st.session_state:
+    st.session_state["sesion_iniciada"] = False
 
-        try:
-            cursor.execute("""
-                SELECT Usuario, Rol
-                FROM Empleado
-                WHERE Usuario = %s AND Contra = %s
-            """, (usuario, password))
+if "rol" not in st.session_state:
+    st.session_state["rol"] = None
 
-            datos = cursor.fetchone()
 
-            if datos:
+# -------------------------------
+# LÓGICA PRINCIPAL
+# -------------------------------
 
-                st.session_state["usuario"] = datos["Usuario"]
-                st.session_state["rol"] = datos["Rol"]  # ← tal cual viene de BD
-                st.session_state["sesion_iniciada"] = True
+if st.session_state["sesion_iniciada"]:
 
-                st.success("Inicio de sesión exitoso.")
-                st.rerun()
+    rol = st.session_state["rol"]
 
-            else:
-                st.error("❌ Credenciales incorrectas.")
+    # DIRECTOR
+    if rol == "Director":
+        interfaz_directiva()
 
-        except Exception as e:
-            st.error(f"Error en login: {e}")
+    # PROMOTORA
+    elif rol == "Promotora":
+        interfaz_promotora()
+
+    # ADMINISTRADOR – dejar mientras no existe el módulo
+    elif rol == "Administrador":
+        st.title("🛠 Panel del Administrador (en construcción)")
+        st.info("Este panel aún no está disponible.")
+
+    else:
+        st.error(f"❌ Rol no reconocido: {rol}")
+        st.session_state.clear()
+        st.rerun()
+
+    # BOTÓN CERRAR SESIÓN
+    if st.sidebar.button("Cerrar sesión"):
+        st.session_state.clear()
+        st.rerun()
+
+else:
+    login()
+
+   
+       
