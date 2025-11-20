@@ -9,6 +9,17 @@ def login():
     st.markdown("""
         <style>
 
+            /* Fondo decorativo con ondas */
+            .stApp {
+                background: #0e1117 !important;
+                background-image:
+                    radial-gradient(circle at 20% 20%, rgba(0,150,0,0.08) 0%, transparent 60%),
+                    radial-gradient(circle at 80% 80%, rgba(100,200,255,0.08) 0%, transparent 60%),
+                    url('https://raw.githubusercontent.com/AmilcarRodriguez44/assets/main/ondas-dark.svg');
+                background-size: cover;
+                background-repeat: no-repeat;
+            }
+
             /* Importar tipografía */
             @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
 
@@ -16,56 +27,48 @@ def login():
                 font-family: 'Poppins', sans-serif !important;
             }
 
-            /* Fondo oscuro */
-            body {
-                background-color: #0e1117 !important;
-            }
-
-            /* Contenedor principal centrado */
-            .container {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                margin-top: 20px;
-            }
-
-            /* Eliminar recuadro molesto superior */
+            /* Ocultar cuadro superior molesto */
             .st-emotion-cache-1dp5vir, .st-emotion-cache-1m2q0ib {
                 display: none !important;
             }
 
-            /* Caja del login */
+            .container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                margin-top: 5vh;
+            }
+
+            .logo-container img {
+                width: 150px;
+                margin: 0 auto;
+                display: block;
+                filter: brightness(0.85);
+            }
+
             .login-box {
-                background: #161a23;
+                background: rgba(22, 26, 35, 0.92);
                 padding: 30px;
                 border-radius: 18px;
                 width: 90%;
                 max-width: 380px;
-                box-shadow: 0px 4px 18px rgba(0,0,0,0.45);
-                margin-top: 10px;
-            }
-
-            /* Logo centrado */
-            .logo-container img {
-                display: block;
-                margin-left: auto;
-                margin-right: auto;
-                width: 150px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+                margin-top: 20px;
+                backdrop-filter: blur(6px);
             }
 
             h2 {
                 color: #e3e6ed !important;
                 text-align: center;
                 font-weight: 600;
-                margin-top: 10px;
             }
 
-            /* Input */
+            /* Inputs */
             .stTextInput > div > div > input {
                 background-color: #1f2430 !important;
                 color: #ffffff !important;
                 border: 1px solid #3d4352 !important;
-                padding: 10px 40px 10px 35px !important;
+                padding-left: 38px !important;
                 border-radius: 8px;
                 font-size: 15px;
             }
@@ -73,7 +76,7 @@ def login():
             /* Iconos dentro del input */
             .icon {
                 position: relative;
-                top: -35px;
+                top: -36px;
                 left: 10px;
                 color: #9aa0ad;
                 font-size: 18px;
@@ -98,10 +101,10 @@ def login():
         </style>
     """, unsafe_allow_html=True)
 
+    # ============================
+    #         CONTENIDO
+    # ============================
 
-    # ============================
-    #        CONTENIDO
-    # ============================
     st.markdown("<div class='container'>", unsafe_allow_html=True)
 
     # LOGO CENTRADO
@@ -111,17 +114,14 @@ def login():
 
     # CAJA DEL LOGIN
     st.markdown("<div class='login-box'>", unsafe_allow_html=True)
-
     st.markdown("<h2>Inicio de Sesión</h2>", unsafe_allow_html=True)
 
-    # ICONOS E INPUTS
     usuario = st.text_input("Usuario")
     st.markdown("<div class='icon'>👤</div>", unsafe_allow_html=True)
 
     password = st.text_input("Contraseña", type="password")
     st.markdown("<div class='icon'>🔒</div>", unsafe_allow_html=True)
 
-    # BOTÓN
     if st.button("Iniciar sesión"):
         con = obtener_conexion()
         if not con:
