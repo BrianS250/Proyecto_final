@@ -11,16 +11,19 @@ def obtener_o_crear_reunion(fecha):
     cursor = con.cursor(dictionary=True)
 
     try:
+        # 1. Verificar si ya existe la reunión en caja_reunion
         cursor.execute("SELECT * FROM caja_reunion WHERE fecha = %s", (fecha,))
         reunion = cursor.fetchone()
 
         if reunion:
             return reunion["id_caja"]
 
+        # 2. Obtener saldo final anterior
         cursor.execute("SELECT saldo_final FROM caja_reunion ORDER BY fecha DESC LIMIT 1")
         ultimo = cursor.fetchone()
         saldo_anterior = ultimo["saldo_final"] if ultimo else 0
 
+        # 3. Crear reunión nueva con saldo inicial correcto
         cursor.execute("""
             INSERT INTO caja_reunion (fecha, saldo_inicial, ingresos, egresos, saldo_final)
             VALUES (%s, %s, 0, 0, %s)
@@ -34,6 +37,7 @@ def obtener_o_crear_reunion(fecha):
         con.close()
 
 
+
 # ---------------------------------------------------------
 # Registrar movimiento en caja
 # ---------------------------------------------------------
@@ -42,11 +46,13 @@ def registrar_movimiento(id_caja, tipo, categoria, monto):
     cursor = con.cursor()
 
     try:
+        # Insertar el movimiento
         cursor.execute("""
             INSERT INTO caja_movimientos (id_caja, tipo, categoria, monto)
             VALUES (%s, %s, %s, %s)
         """, (id_caja, tipo, categoria, monto))
 
+        # Actualizar los totales del día
         if tipo == "Ingreso":
             cursor.execute("""
                 UPDATE caja_reunion
@@ -55,7 +61,7 @@ def registrar_movimiento(id_caja, tipo, categoria, monto):
                 WHERE id_caja = %s
             """, (monto, monto, id_caja))
 
-        else:
+        else:  # Egreso
             cursor.execute("""
                 UPDATE caja_reunion
                 SET egresos = egresos + %s,
@@ -70,8 +76,9 @@ def registrar_movimiento(id_caja, tipo, categoria, monto):
         con.close()
 
 
+
 # ---------------------------------------------------------
-# Obtener saldo actual global
+# Obtener saldo global (última reunión)
 # ---------------------------------------------------------
 def obtener_saldo_actual():
     con = obtener_conexion()
@@ -86,6 +93,26 @@ def obtener_saldo_actual():
         con.close()
 
 
+
+# ---------------------------------------------------------
+# NUEVO — Obtener saldo por fecha (para directiva.py)
+# ---------------------------------------------------------
+def obtener_saldo_por_fecha(fecha):
+    con = obtener_conexion()
+    cursor = con.cursor(dictionary=True)
+
+    try:
+        cursor.execute("SELECT saldo_final FROM caja_reunion WHERE fecha = %s", (fecha,))
+        fila = cursor.fetchone()
+
+        return fila["saldo_final"] if fila else 0
+
+    finally:
+        cursor.close()
+        con.close()
+
+
+
 # ---------------------------------------------------------
 # Mostrar reporte de caja
 # ---------------------------------------------------------
@@ -96,6 +123,7 @@ def mostrar_reporte_caja():
     cursor = con.cursor(dictionary=True)
 
     try:
+        # Obtener todas las fechas registradas
         cursor.execute("SELECT fecha FROM caja_reunion ORDER BY fecha DESC")
         fechas = [f["fecha"] for f in cursor.fetchall()]
 
@@ -105,6 +133,7 @@ def mostrar_reporte_caja():
 
         fecha_sel = st.selectbox("📅 Seleccione la fecha de reunión:", fechas)
 
+        # Cargar datos de esa fecha
         cursor.execute("SELECT * FROM caja_reunion WHERE fecha = %s", (fecha_sel,))
         data = cursor.fetchone()
 
@@ -122,6 +151,7 @@ def mostrar_reporte_caja():
         st.markdown("### 💰 Saldo Final")
         st.metric("", f"${data['saldo_final']:.2f}")
 
+        # Traer movimientos
         cursor.execute("""
             SELECT tipo, categoria, monto
             FROM caja_movimientos
