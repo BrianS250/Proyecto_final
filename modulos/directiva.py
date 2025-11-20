@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 from modulos.conexion import obtener_conexion
-from modulos.autorizar_prestamo import autorizar_prestamo   # << AGREGADO
+from modulos.autorizar_prestamo import autorizar_prestamo
 
 
 # ---------------------------------------------------------
@@ -93,7 +93,7 @@ def pagina_asistencia():
     row = cursor.fetchone()
 
     # ---------------------------------------------------------
-    # CREACIÓN DE REUNIÓN (CORREGIDO)
+    # CREACIÓN DE REUNIÓN
     # ---------------------------------------------------------
     if row:
         id_reunion = row[0]
@@ -102,7 +102,6 @@ def pagina_asistencia():
             cursor.execute("SHOW COLUMNS FROM Reunion")
             columnas = [col[0] for col in cursor.fetchall()]
 
-            # Campos base (CORREGIDO: Acuerdos con mayúscula)
             datos = {
                 "Fecha_reunion": fecha,
                 "observaciones": "",
@@ -111,7 +110,6 @@ def pagina_asistencia():
                 "Id_Grupo": 1
             }
 
-            # AGREGAR SOLO COLUMNAS QUE FALTAN
             for col in columnas:
                 if col == "Id_Reunion":
                     continue
@@ -353,7 +351,7 @@ def pagina_multas():
         cols[6].write("**Acción**")
 
         for row in multas:
-            id_multa, socia, tipo, monto, estado_actual, fecha = row
+            id_multa, socia, tipo, monto, estado_actual, fecha_mult = row
 
             col1, col2, col3, col4, col5, col6, col7 = st.columns([1,3,3,2,2,2,2])
 
@@ -369,14 +367,43 @@ def pagina_multas():
                 key=f"estado_{id_multa}"
             )
 
-            col6.write(str(fecha))
+            col6.write(str(fecha_mult))
 
             if col7.button("Actualizar", key=f"btn_{id_multa}"):
+
+                # ✔ Si pasa de "A pagar" → "Pagada", se registra INGRESO EN CAJA
+                if estado_actual == "A pagar" and nuevo_estado == "Pagada":
+
+                    cursor.execute("""
+                        SELECT Saldo_actual
+                        FROM Caja
+                        ORDER BY Id_Caja DESC
+                        LIMIT 1
+                    """)
+                    row_saldo = cursor.fetchone()
+                    saldo_actual = row_saldo[0] if row_saldo else 0
+
+                    nuevo_saldo = saldo_actual + float(monto)
+
+                    cursor.execute("""
+                        INSERT INTO Caja (Concepto, Monto, Saldo_actual, Id_Grupo, Id_Tipo_movimiento, Id_Multa, Fecha)
+                        VALUES (%s, %s, %s, %s, %s, %s, CURRENT_DATE())
+                    """,
+                    (
+                        f"Pago de multa – {socia}",
+                        monto,
+                        nuevo_saldo,
+                        1,
+                        2,      # INGRESO
+                        id_multa
+                    ))
+
                 cursor.execute("""
                     UPDATE Multa
                     SET Estado = %s
                     WHERE Id_Multa = %s
                 """, (nuevo_estado, id_multa))
+
                 con.commit()
                 st.success(f"Estado actualizado para la multa ID {id_multa}")
                 st.rerun()
