@@ -93,7 +93,7 @@ def pagina_asistencia():
     row = cursor.fetchone()
 
     # ---------------------------------------------------------
-    # CREAR REUNIÓN SI NO EXISTE (CORREGIDO)
+    # CREACIÓN DE REUNIÓN (CORREGIDO)
     # ---------------------------------------------------------
     if row:
         id_reunion = row[0]
@@ -102,16 +102,16 @@ def pagina_asistencia():
             cursor.execute("SHOW COLUMNS FROM Reunion")
             columnas = [col[0] for col in cursor.fetchall()]
 
-            # Campos base
+            # Campos base (CORREGIDO: Acuerdos con mayúscula)
             datos = {
                 "Fecha_reunion": fecha,
                 "observaciones": "",
-                "acuerdos": "",
+                "Acuerdos": "",
                 "Tema_central": "",
                 "Id_Grupo": 1
             }
 
-            # AGREGAR SOLO COLUMNAS QUE FALTAN (corregido)
+            # AGREGAR SOLO COLUMNAS QUE FALTAN
             for col in columnas:
                 if col == "Id_Reunion":
                     continue
@@ -302,7 +302,7 @@ def pagina_multas():
             st.success("Multa registrada correctamente.")
             st.rerun()
         except Exception as e:
-            st.error(f"⚠ Error al guardar multa: {e}")
+            st.error(f"⚠️ Error al guardar multa: {e}")
 
     st.markdown("---")
 
