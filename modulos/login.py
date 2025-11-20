@@ -2,83 +2,102 @@ import streamlit as st
 from modulos.conexion import obtener_conexion
 
 def login():
-    st.set_page_config(page_title="Inicio de Sesión", layout="centered")
 
-    # =============================
-    #  ESTILOS
-    # =============================
+    # ============================
+    #   ESTILO OSCURO PERSONALIZADO
+    # ============================
     st.markdown("""
         <style>
-        body {
-            background-color: #f4f6f2;
-        }
-        .login-box {
-            background-color: white;
-            padding: 40px;
-            border-radius: 18px;
-            box-shadow: 0px 4px 18px rgba(0,0,0,0.15);
-            width: 380px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-        .login-title {
-            font-size: 28px;
-            font-weight: 700;
-            text-align: center;
-            color: #0d3b66;
-            margin-bottom: 25px;
-        }
-        .input-label {
-            font-size: 16px;
-            font-weight: 600;
-            color: #0d3b66;
-        }
-        .stTextInput>div>div>input {
-            color: black !important;
-        }
+            body {
+                background-color: #0e1117 !important;
+            }
+
+            .login-box {
+                background-color: #161a23;
+                padding: 35px;
+                width: 420px;
+                margin: auto;
+                margin-top: 50px;
+                border-radius: 18px;
+                box-shadow: 0px 4px 15px rgba(0,0,0,0.4);
+            }
+
+            label, h2, p, .stTextInput > div > div > input {
+                color: #e3e6ed !important;
+                font-size: 16px;
+            }
+
+            /* Input boxes */
+            .stTextInput > div > div > input {
+                background-color: #1f2430 !important;
+                color: #e3e6ed !important;
+                border: 1px solid #3b4252 !important;
+                padding: 8px;
+                border-radius: 6px;
+            }
+
+            /* Button */
+            .stButton > button {
+                background-color: #2e7d32;
+                color: white;
+                font-weight: bold;
+                border-radius: 6px;
+                padding: 10px 20px;
+                width: 100%;
+                border: none;
+                transition: 0.2s;
+            }
+
+            .stButton > button:hover {
+                background-color: #41a447;
+                color: white;
+            }
+
+            /* Ocultar header y menú */
+            header, footer, .st-emotion-cache-18ni7ap {
+                visibility: hidden;
+            }
         </style>
     """, unsafe_allow_html=True)
 
-    # =============================
-    #  LOGO CENTRADO
-    # =============================
-    st.image("modulos/imagenes/logo.png", width=140)
+    # ============================
+    #   LOGO CENTRADO
+    # ============================
+    st.markdown("<div style='text-align:center; margin-top:20px;'>", unsafe_allow_html=True)
+    st.image("modulos/imagenes/logo.png", width=150)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    # =============================
-    #  CUADRO DE LOGIN
-    # =============================
-    with st.container():
-        st.markdown('<div class="login-box">', unsafe_allow_html=True)
+    # ============================
+    #   CONTENEDOR DEL LOGIN
+    # ============================
+    st.markdown("<div class='login-box'>", unsafe_allow_html=True)
 
-        st.markdown('<div class="login-title">Inicio de Sesión</div>', unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align:center;'>Inicio de Sesión</h2>", unsafe_allow_html=True)
 
-        st.markdown('<p class="input-label">Usuario</p>', unsafe_allow_html=True)
-        usuario = st.text_input("", key="usuario_input")
+    usuario = st.text_input("Usuario")
+    password = st.text_input("Contraseña", type="password")
 
-        st.markdown('<p class="input-label">Contraseña</p>', unsafe_allow_html=True)
-        password = st.text_input("", type="password", key="password_input")
+    if st.button("Iniciar sesión"):
+        con = obtener_conexion()
+        if not con:
+            st.error("❌ No se pudo conectar a la base de datos.")
+            return
 
-        if st.button("Iniciar sesión", use_container_width=True):
-            con = obtener_conexion()
-            if not con:
-                st.error("No se puede conectar a la base de datos.")
-                return
+        cursor = con.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT Usuario, Rol 
+            FROM Empleado
+            WHERE Usuario = %s AND Contra = %s
+        """, (usuario, password))
 
-            cursor = con.cursor(dictionary=True)
-            cursor.execute("""
-                SELECT Usuario, Rol FROM Empleado
-                WHERE Usuario = %s AND Contra = %s
-            """, (usuario, password))
+        datos = cursor.fetchone()
 
-            datos = cursor.fetchone()
+        if datos:
+            st.session_state["usuario"] = datos["Usuario"]
+            st.session_state["rol"] = datos["Rol"]
+            st.session_state["sesion_iniciada"] = True
+            st.rerun()
+        else:
+            st.error("❌ Usuario o contraseña incorrectos.")
 
-            if datos:
-                st.session_state["usuario"] = datos["Usuario"]
-                st.session_state["rol"] = datos["Rol"]
-                st.session_state["sesion_iniciada"] = True
-                st.success("Ingreso exitoso.")
-                st.experimental_rerun()
-            else:
-                st.error("Usuario o contraseña incorrectos.")
-
-        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
