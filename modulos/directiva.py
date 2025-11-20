@@ -227,38 +227,86 @@ def pagina_asistencia():
     descripcion = st.text_input("Descripción del ingreso (opcional)")
     monto = st.number_input("Monto recibido ($):", min_value=0.00, step=0.50)
 
-    if st.button("➕ Registrar ingreso extraordinario"):
-        try:
-            cursor.execute("""
-                INSERT INTO IngresosExtra (Id_Reunion, Id_Socia, Tipo, Descripcion, Monto, Fecha)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (id_reunion, id_socia_aporta, tipo, descripcion, monto, fecha))
+    # ---------------------------------------------------------
+# INGRESOS EXTRAORDINARIOS
+# ---------------------------------------------------------
+st.header("💰 Ingresos extraordinarios de la reunión")
 
-            con.commit()
-            st.success("Ingreso extraordinario registrado con éxito.")
-            st.rerun()
+cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
+lista_socias = cursor.fetchall()
+dict_socias = {nombre: id_socia for id_socia, nombre in lista_socias}
 
-        except Exception as e:
-            st.error(f"❌ Error al registrar ingreso: {e}")
+socia_sel = st.selectbox("👩 Socia que aporta:", dict_socias.keys())
+id_socia_aporta = dict_socias[socia_sel]
 
-    cursor.execute("""
-        SELECT S.Nombre, I.Tipo, I.Descripcion, I.Monto, I.Fecha
-        FROM IngresosExtra I
-        JOIN Socia S ON S.Id_Socia = I.Id_Socia
-        WHERE I.Id_Reunion = %s
-    """, (id_reunion,))
-    ingresos = cursor.fetchall()
+tipo = st.selectbox("Tipo de ingreso:", ["Rifa", "Donación", "Actividad", "Otro"])
+descripcion = st.text_input("Descripción del ingreso (opcional)")
+monto = st.number_input("Monto recibido ($):", min_value=0.00, step=0.50)
 
-    if ingresos:
-        df_ing = pd.DataFrame(ingresos, columns=["Socia", "Tipo", "Descripción", "Monto", "Fecha"])
-        st.subheader("📌 Ingresos registrados hoy")
-        st.dataframe(df_ing)
+# =============================
+# BOTÓN DE REGISTRAR INGRESO
+# =============================
+if st.button("➕ Registrar ingreso extraordinario"):
+    try:
+        # 1️⃣ Registrar ingreso en tabla IngresosExtra
+        cursor.execute("""
+            INSERT INTO IngresosExtra (Id_Reunion, Id_Socia, Tipo, Descripcion, Monto, Fecha)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (id_reunion, id_socia_aporta, tipo, descripcion, monto, fecha))
 
-        total_dia = df_ing["Monto"].sum()
-        st.success(f"💵 Total del día: ${total_dia:.2f}")
-    else:
-        st.info("No hay ingresos extraordinarios registrados hoy.")
+        # 2️⃣ Obtener saldo actual de caja
+        cursor.execute("""
+            SELECT Saldo_actual
+            FROM Caja
+            ORDER BY Id_Caja DESC
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        saldo_actual = row[0] if row else 0
 
+        # 3️⃣ Calcular nuevo saldo
+        nuevo_saldo = saldo_actual + float(monto)
+
+        # 4️⃣ Registrar movimiento en CAJA como Ingreso
+        cursor.execute("""
+            INSERT INTO Caja (Concepto, Monto, Saldo_actual, Id_Grupo, Id_Tipo_movimiento, Fecha)
+            VALUES (%s, %s, %s, %s, %s, CURRENT_DATE())
+        """,
+        (
+            f"Ingreso extraordinario – {socia_sel} ({tipo})",
+            monto,
+            nuevo_saldo,
+            1,     # Id_Grupo
+            2      # 2 = INGRESO
+        ))
+
+        con.commit()
+        st.success("Ingreso extraordinario registrado y agregado a caja.")
+        st.rerun()
+
+    except Exception as e:
+        st.error(f"❌ Error al registrar ingreso: {e}")
+
+# =============================
+# MOSTRAR INGRESOS DEL DÍA
+# =============================
+cursor.execute("""
+    SELECT S.Nombre, I.Tipo, I.Descripcion, I.Monto, I.Fecha
+    FROM IngresosExtra I
+    JOIN Socia S ON S.Id_Socia = I.Id_Socia
+    WHERE I.Id_Reunion = %s
+""", (id_reunion,))
+ingresos = cursor.fetchall()
+
+if ingresos:
+    df_ing = pd.DataFrame(ingresos, columns=["Socia", "Tipo", "Descripción", "Monto", "Fecha"])
+    st.subheader("📌 Ingresos registrados hoy")
+    st.dataframe(df_ing)
+
+    total_dia = df_ing["Monto"].sum()
+    st.success(f"💵 Total del día: ${total_dia:.2f}")
+else:
+    st.info("No hay ingresos extraordinarios registrados hoy.")
 
 
 # ---------------------------------------------------------
