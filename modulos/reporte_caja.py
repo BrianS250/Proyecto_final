@@ -1,70 +1,61 @@
 import streamlit as st
 import pandas as pd
+from datetime import date
 from modulos.conexion import obtener_conexion
 
+# Importar funciones del nuevo sistema de caja
+from modulos.caja import obtener_o_crear_reunion
+
+
+# ============================================================
+# REPORTE DE CAJA POR REUNIÓN
+# ============================================================
 def reporte_caja():
 
     st.title("📊 Reporte de Caja por Reunión")
 
     con = obtener_conexion()
-    cursor = con.cursor()
+    cursor = con.cursor(dictionary=True)
 
     # ---------------------------------------------------------
-    # FECHA SELECCIONADA
+    # CREAR REUNIÓN DE HOY SI NO EXISTE
     # ---------------------------------------------------------
-    fechas = []
+    hoy = date.today().strftime("%Y-%m-%d")
+    obtener_o_crear_reunion(hoy)
 
-    cursor.execute("SELECT DISTINCT Fecha FROM Caja ORDER BY Fecha DESC")
+    # ---------------------------------------------------------
+    # LISTA DE FECHAS DISPONIBLES
+    # ---------------------------------------------------------
+    cursor.execute("SELECT fecha FROM caja_reunion ORDER BY fecha DESC")
     fechas_raw = cursor.fetchall()
 
-    if fechas_raw:
-        fechas = [f[0] for f in fechas_raw]
-
-    if not fechas:
-        st.info("Aún no hay registros en caja.")
+    if not fechas_raw:
+        st.info("Aún no hay reuniones registradas en caja.")
         return
+
+    fechas = [fila["fecha"] for fila in fechas_raw]
 
     fecha_sel = st.selectbox("📅 Seleccione la fecha de reunión:", fechas)
 
     # ---------------------------------------------------------
-    # SALDO INICIAL
+    # OBTENER RESUMEN DE LA FECHA SELECCIONADA
     # ---------------------------------------------------------
     cursor.execute("""
-        SELECT Saldo_actual 
-        FROM Caja 
-        WHERE Fecha < %s
-        ORDER BY Id_Caja DESC LIMIT 1
+        SELECT *
+        FROM caja_reunion
+        WHERE fecha = %s
     """, (fecha_sel,))
+    
+    reunion = cursor.fetchone()
 
-    row = cursor.fetchone()
-    saldo_inicial = row[0] if row else 0
-
-    # ---------------------------------------------------------
-    # MOVIMIENTOS DEL DÍA
-    # ---------------------------------------------------------
-    cursor.execute("""
-        SELECT Concepto, Monto, Saldo_actual, Id_Tipo_movimiento
-        FROM Caja
-        WHERE Fecha = %s
-        ORDER BY Id_Caja ASC
-    """, (fecha_sel,))
-
-    movimientos = cursor.fetchall()
-
-    if not movimientos:
-        st.warning("No hay movimientos registrados en esta fecha.")
+    if not reunion:
+        st.warning("No se encontró información de caja para esta fecha.")
         return
 
-    df = pd.DataFrame(movimientos, columns=["Concepto", "Monto", "Saldo Posterior", "Tipo"])
-
-    # Entradas (Id_Tipo_movimiento = 2)
-    ingresos = df[df["Tipo"] == 2]["Monto"].sum()
-
-    # Salidas (Id_Tipo_movimiento = 3)
-    egresos = df[df["Tipo"] == 3]["Monto"].sum() * -1  # egresos son negativos
-
-    # Saldo final
-    saldo_final = saldo_inicial + ingresos - egresos
+    saldo_inicial = float(reunion["saldo_inicial"])
+    ingresos = float(reunion["ingresos"])
+    egresos = float(reunion["egresos"])
+    saldo_final = float(reunion["saldo_final"])
 
     # ---------------------------------------------------------
     # MOSTRAR RESUMEN
@@ -77,20 +68,31 @@ def reporte_caja():
     col2.metric("Ingresos del Día", f"${ingresos:.2f}")
     col3.metric("Egresos del Día", f"${egresos:.2f}")
 
-    st.metric("💰 Saldo Final", f"${saldo_final:.2f}")
+    st.markdown("### 💰 Saldo Final")
+    st.metric("", f"${saldo_final:.2f}")
 
     st.markdown("---")
 
     # ---------------------------------------------------------
     # DETALLE DE MOVIMIENTOS
     # ---------------------------------------------------------
-    st.subheader("📋 Detalle de Movimientos")
+    st.subheader("📋 Detalle de Movimientos del Día")
 
-    df_display = df.copy()
-    df_display["Monto"] = df_display["Monto"].apply(lambda x: f"${x:.2f}")
-    df_display["Saldo Posterior"] = df_display["Saldo Posterior"].apply(lambda x: f"${x:.2f}")
+    cursor.execute("""
+        SELECT tipo, categoria, monto
+        FROM caja_movimientos
+        WHERE id_caja = %s
+        ORDER BY id_mov ASC
+    """, (reunion["id_caja"],))
 
-    tipo_map = {2: "Ingreso", 3: "Egreso"}
-    df_display["Tipo"] = df_display["Tipo"].map(tipo_map)
+    movimientos = cursor.fetchall()
 
-    st.dataframe(df_display)
+    if not movimientos:
+        st.info("No hay movimientos registrados para esta reunión.")
+        return
+
+    df = pd.DataFrame(movimientos)
+
+    df["monto"] = df["monto"].apply(lambda x: f"${x:.2f}")
+
+    st.dataframe(df)
