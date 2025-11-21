@@ -26,7 +26,7 @@ def gastos_grupo():
     responsable = st.text_input("👤 Nombre de la persona responsable del gasto")
 
     # --------------------------------------------------------
-    # DUI — (sin Enter-to-apply)
+    # DUI
     # --------------------------------------------------------
     dui_input = st.text_area(
         "DUI (9 dígitos)",
@@ -35,7 +35,7 @@ def gastos_grupo():
     ).strip()
 
     # --------------------------------------------------------
-    # DESCRIPCIÓN (OPCIONAL)
+    # CONCEPTO (OPCIONAL)
     # --------------------------------------------------------
     descripcion = st.text_input("Concepto del gasto (opcional)")
 
@@ -56,23 +56,24 @@ def gastos_grupo():
     if st.button("💳 Registrar gasto"):
 
         # ======================================================
-        # VALIDAR MONTO vs SALDO
+        # 1. VALIDAR MONTO
         # ======================================================
         if monto > saldo:
             st.error(f"❌ No puede gastar ${monto:.2f}. Saldo disponible: ${saldo:.2f}")
             return
 
         # ======================================================
-        # VALIDAR RESPONSABLE
+        # 2. VALIDAR RESPONSABLE
         # ======================================================
         if not responsable.strip():
             st.error("❌ Debe ingresar el nombre del responsable.")
             return
 
         # ======================================================
-        # VALIDAR DUI (exactamente 9 dígitos)
+        # 3. VALIDAR DUI
         # ======================================================
         dui_limpio = dui_input.replace("-", "")
+
         if not dui_limpio.isdigit() or len(dui_limpio) != 9:
             st.error("❌ El DUI debe tener exactamente 9 dígitos numéricos.")
             return
@@ -80,39 +81,53 @@ def gastos_grupo():
         dui_formateado = dui_limpio[:8] + "-" + dui_limpio[8:]
 
         # ======================================================
-        # CREAR/OBTENER REUNIÓN — GARANTIZADO QUE NO ES NONE
+        # 4. OBTENER CAJA (GARANTIZADO)
         # ======================================================
         id_caja = obtener_o_crear_reunion(fecha)
 
-        if id_caja is None:
-            st.error("❌ Error interno: no se pudo obtener una reunión de caja válida.")
+        # FORZAR A TIPO INT
+        try:
+            id_caja = int(id_caja)
+        except:
+            st.error("❌ Error interno: Id_Caja inválido.")
             return
 
         # ======================================================
-        # REGISTRAR GASTO
+        # 5. REGISTRAR GASTO (A PRUEBA DE ERRORES)
         # ======================================================
-        cursor.execute("""
-            INSERT INTO Gastos_grupo(Fecha_gasto, Descripcion, Monto, Responsable, DUI, Id_Caja)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (fecha, descripcion, monto, responsable, dui_formateado, id_caja))
-        con.commit()
+        try:
+            cursor.execute("""
+                INSERT INTO Gastos_grupo(Fecha_gasto, Descripcion, Monto, Responsable, DUI, Id_Caja)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                fecha,
+                descripcion if descripcion.strip() else "Sin concepto",
+                monto,
+                responsable,
+                dui_formateado,
+                id_caja
+            ))
+            con.commit()
+
+        except Exception as e:
+            st.error("❌ Error registrando el gasto en MySQL.")
+            st.error(str(e))
+            return
 
         # ======================================================
-        # REGISTRAR MOVIMIENTO EN CAJA
+        # 6. REGISTRAR MOVIMIENTO EN CAJA
         # ======================================================
-        concepto_real = descripcion if descripcion.strip() else "Sin concepto"
-
         registrar_movimiento(
             id_caja,
             "Egreso",
-            f"Gasto – {concepto_real}",
+            f"Gasto – {descripcion if descripcion.strip() else 'Sin concepto'}",
             monto
         )
 
         st.success("✔ Gasto registrado exitosamente.")
 
         # ======================================================
-        # GENERAR PDF
+        # 7. GENERAR PDF
         # ======================================================
         nombre_pdf = f"gasto_{fecha}_{responsable}.pdf"
 
@@ -121,7 +136,7 @@ def gastos_grupo():
             ["Fecha", fecha],
             ["Responsable", responsable],
             ["DUI", dui_formateado],
-            ["Concepto", concepto_real],
+            ["Concepto", descripcion if descripcion.strip() else "Sin concepto"],
             ["Monto del gasto", f"${monto:.2f}"],
             ["Saldo antes", f"${saldo:.2f}"],
             ["Saldo después", f"${saldo - monto:.2f}"],
@@ -129,7 +144,6 @@ def gastos_grupo():
 
         doc = SimpleDocTemplate(nombre_pdf, pagesize=letter)
         tabla = Table(data)
-
         tabla.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.gray),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
