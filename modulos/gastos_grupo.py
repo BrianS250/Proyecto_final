@@ -1,116 +1,50 @@
 import streamlit as st
-from datetime import date
 from modulos.conexion import obtener_conexion
-
-# Caja por reunión
-from modulos.caja import obtener_o_crear_reunion, registrar_movimiento
-
-# PDF
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
-from reportlab.lib.units import inch
+from modulos.caja import obtener_o_crear_reunion, registrar_movimiento, obtener_saldo_por_fecha
+from datetime import date
 
 
 def gastos_grupo():
 
-    st.header("🧾 Registro de otros gastos del grupo")
+    st.header("💸 Registrar gastos del grupo")
 
-    # -----------------------------
-    # FORMULARIO
-    # -----------------------------
-    fecha_raw = st.date_input("📅 Fecha del gasto", date.today())
-    fecha_gasto = fecha_raw.strftime("%Y-%m-%d")
+    con = obtener_conexion()
+    cursor = con.cursor()
 
-    concepto = st.text_input("📝 Concepto del gasto (ej. 'Refrigerio', 'Materiales')")
-    responsable = st.text_input("👤 Responsable del gasto (opcional)")
-    monto = st.number_input("💵 Monto del gasto ($)", min_value=0.25, step=0.25)
+    fecha_raw = st.date_input("Fecha del gasto", date.today())
+    fecha = fecha_raw.strftime("%Y-%m-%d")
 
-    if st.button("➖ Registrar gasto"):
+    descripcion = st.text_input("Descripción del gasto")
+    monto = st.number_input("Monto del gasto ($)", min_value=0.25, step=0.25)
 
-        if concepto.strip() == "":
-            st.warning("⚠ Debe escribir un concepto del gasto.")
+    # Obtener saldo disponible de la caja
+    try:
+        saldo_actual = obtener_saldo_por_fecha(fecha)
+        st.info(f"💰 Saldo disponible en caja para {fecha}: **${saldo_actual:.2f}**")
+    except:
+        saldo_actual = 0
+        st.error("No se pudo obtener el saldo de caja.")
+
+    if st.button("💾 Registrar gasto"):
+
+        # VALIDACIÓN PRINCIPAL:
+        if monto > saldo_actual:
+            st.error(f"❌ El gasto supera el saldo disponible. Saldo: ${saldo_actual:.2f} — Gasto: ${monto:.2f}")
             return
 
-        try:
-            # 1️⃣ Crear/obtener reunión
-            id_caja = obtener_o_crear_reunion(fecha_gasto)
+        # Si pasa la validación → registrar
+        cursor.execute("""
+            INSERT INTO GastosGrupo(Descripcion, Monto, Fecha)
+            VALUES(%s, %s, %s)
+        """, (descripcion, monto, fecha))
+        con.commit()
 
-            # 2️⃣ Registrar movimiento (EGRESO)
-            descripcion = f"Gasto del grupo – {concepto}"
-            if responsable.strip() != "":
-                descripcion += f" (Responsable: {responsable})"
+        # Registrar movimiento EN CAJA (egreso)
+        id_caja = obtener_o_crear_reunion(fecha)
+        registrar_movimiento(id_caja, "Egreso", f"Gasto – {descripcion}", monto)
 
-            registrar_movimiento(
-                id_caja,
-                "Egreso",
-                descripcion,
-                monto
-            )
+        st.success("Gasto registrado correctamente y descontado de caja.")
+        st.rerun()
 
-            st.success("✔ Gasto registrado y descontado de la caja del día.")
-
-            # Guardamos datos para mostrar el resumen
-            st.session_state["ultimo_gasto"] = {
-                "fecha": fecha_gasto,
-                "concepto": concepto,
-                "responsable": responsable if responsable else "No especificado",
-                "monto": monto
-            }
-
-        except Exception as e:
-            st.error(f"❌ Error al registrar gasto: {e}")
-
-
-    # ======================================================
-    # MOSTRAR RESUMEN SI EXISTE UN GASTO RECIENTE
-    # ======================================================
-    if "ultimo_gasto" in st.session_state:
-
-        data = st.session_state["ultimo_gasto"]
-
-        st.markdown("---")
-        st.subheader("📄 Resumen del gasto registrado")
-
-        st.write(f"**📅 Fecha:** {data['fecha']}")
-        st.write(f"**📝 Concepto:** {data['concepto']}")
-        st.write(f"**👤 Responsable:** {data['responsable']}")
-        st.write(f"**💵 Monto:** ${data['monto']:.2f}")
-
-        # ======================================================
-        # BOTÓN PARA PDF
-        # ======================================================
-        if st.button("📥 Descargar PDF del gasto"):
-
-            nombre_pdf = f"gasto_{data['fecha']}.pdf"
-            doc = SimpleDocTemplate(nombre_pdf, pagesize=letter)
-
-            tabla_data = [
-                ["Campo", "Valor"],
-                ["Fecha del gasto", data["fecha"]],
-                ["Concepto", data["concepto"]],
-                ["Responsable", data["responsable"]],
-                ["Monto ($)", f"${data['monto']:.2f}"]
-            ]
-
-            tabla = Table(tabla_data)
-            tabla.setStyle(TableStyle([
-                ("BACKGROUND", (0,0), (-1,0), colors.darkblue),
-                ("TEXTCOLOR", (0,0), (-1,0), colors.white),
-                ("ALIGN", (0,0), (-1,-1), "CENTER"),
-                ("BOX", (0,0), (-1,-1), 1, colors.black),
-                ("GRID", (0,0), (-1,-1), 1, colors.black),
-                ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-                ("FONTSIZE", (0,0), (-1,-1), 11),
-                ("BOTTOMPADDING", (0,0), (-1,0), 10),
-            ]))
-
-            doc.build([tabla])
-
-            with open(nombre_pdf, "rb") as f:
-                st.download_button(
-                    "📄 Descargar PDF",
-                    f,
-                    file_name=nombre_pdf,
-                    mime="application/pdf"
-                )
+    cursor.close()
+    con.close()
