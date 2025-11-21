@@ -1,19 +1,14 @@
 import streamlit as st
-import pandas as pd
+from reportlab.platypus import SimpleDocTemplate, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import letter
 from modulos.conexion import obtener_conexion
 
-# PDF
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet
-import datetime
 
-
-# ============================================================
-# PANEL PRINCIPAL
-# ============================================================
+# ======================================================================
+# PANEL PRINCIPAL DE REGLAS
+# ======================================================================
 def gestionar_reglas():
-
     st.title("📘 Reglas internas del grupo")
 
     seccion = st.radio(
@@ -39,61 +34,39 @@ def gestionar_reglas():
         exportar_pdf()
 
 
-
-# ============================================================
-# 1. EDITOR DE REGLAS INTERNAS
-# ============================================================
+# ======================================================================
+# 1. EDITOR DE REGLAS INTERNAS (TABLA reglas_grupo)
+# ======================================================================
 def editor_reglas():
-
-    st.subheader("📖 Editor de reglas internas")
+    st.subheader("📘 Editor de reglas internas")
 
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
 
-    cursor.execute("SELECT * FROM reglas_grupo WHERE id_regla = 1")
-    datos = cursor.fetchone()
+    cursor.execute("SELECT * FROM reglas_grupo ORDER BY id_regla ASC")
+    reglas = cursor.fetchall()
 
-    if not datos:
-        st.error("No existe el registro de reglas internas (id_regla = 1).")
-        return
+    # Si no existen reglas → crear primera fila
+    if not reglas:
+        cursor.execute("INSERT INTO reglas_grupo (nombre_grupo, nombre_comunidad) VALUES ('', '')")
+        con.commit()
+        cursor.execute("SELECT * FROM reglas_grupo ORDER BY id_regla ASC")
+        reglas = cursor.fetchall()
 
-    nombre_grupo = st.text_input("Nombre del Grupo", datos["nombre_grupo"])
-    nombre_comunidad = st.text_input("Comunidad", datos["nombre_comunidad"])
+    regla = reglas[0]  # siempre hay solo una fila
 
-    multa_inasistencia = st.number_input(
-        "Multa por inasistencia ($)",
-        min_value=0.0, step=0.25,
-        value=float(datos["multa_inasistencia"])
-    )
+    st.write("### Valores generales del grupo")
 
-    ahorro_minimo = st.number_input(
-        "Ahorro mínimo ($)",
-        min_value=0.0, step=0.25,
-        value=float(datos["ahorro_minimo"])
-    )
-
-    interes_por_10 = st.number_input(
-        "Interés por cada $10 prestados (%)",
-        min_value=0.0, step=0.1,
-        value=float(datos["interes_por_10"])
-    )
-
-    prestamo_maximo = st.number_input(
-        "Préstamo máximo ($)",
-        min_value=0.0, step=1.0,
-        value=float(datos["prestamo_maximo"])
-    )
-
-    plazo_maximo = st.number_input(
-        "Plazo máximo (meses)",
-        min_value=1, step=1,
-        value=int(datos["plazo_maximo"])
-    )
-
-    otras_reglas = st.text_area("Otras reglas", datos["otras_reglas"])
+    nombre_grupo = st.text_input("Nombre del Grupo", regla["nombre_grupo"])
+    comunidad = st.text_input("Comunidad", regla["nombre_comunidad"])
+    multa_inasistencia = st.number_input("Multa por inasistencia", value=float(regla["multa_inasistencia"]))
+    ahorro_minimo = st.number_input("Ahorro mínimo", value=float(regla["ahorro_minimo"]))
+    interes10 = st.number_input("Interés por cada $10 prestados (%)", value=float(regla["interes_por_10"]))
+    prestamo_maximo = st.number_input("Préstamo máximo", value=float(regla["prestamo_maximo"]))
+    plazo_maximo = st.number_input("Plazo máximo (meses)", value=int(regla["plazo_maximo"]))
+    otras_reglas = st.text_area("Otras reglas", regla["otras_reglas"] or "")
 
     if st.button("💾 Guardar cambios"):
-
         cursor.execute("""
             UPDATE reglas_grupo
             SET nombre_grupo=%s,
@@ -104,63 +77,84 @@ def editor_reglas():
                 prestamo_maximo=%s,
                 plazo_maximo=%s,
                 otras_reglas=%s
-            WHERE id_regla = 1
+            WHERE id_regla=%s
         """, (
             nombre_grupo,
-            nombre_comunidad,
+            comunidad,
             multa_inasistencia,
             ahorro_minimo,
-            interes_por_10,
+            interes10,
             prestamo_maximo,
             plazo_maximo,
-            otras_reglas
+            otras_reglas,
+            regla["id_regla"]
         ))
 
         con.commit()
         st.success("Cambios guardados correctamente.")
         st.rerun()
 
+    cursor.close()
+    con.close()
 
 
-# ============================================================
-# 2. COMITÉ DIRECTIVO
-# ============================================================
+# ======================================================================
+# 2. COMITÉ DIRECTIVO  (TABLA comite_directiva)
+# ======================================================================
 def mostrar_comite():
-
-    st.subheader("👥 Comité directivo")
+    st.subheader("👩‍💼 Comité directivo")
 
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
 
-    cursor.execute("""
-        SELECT c.id_comite, c.cargo, s.Nombre AS nombre_socia
-        FROM comite_directiva c
-        JOIN Socia s ON s.Id_Socia = c.id_regla
-        ORDER BY c.id_comite ASC
-    """)
-    datos = cursor.fetchall()
+    cursor.execute("SELECT * FROM comite_directiva ORDER BY id_comite ASC")
+    filas = cursor.fetchall()
 
-    if not datos:
-        st.info("No hay miembros registrados.")
-    else:
-        st.table(pd.DataFrame(datos))
+    st.write("### Registrar nuevo miembro del comité")
+
+    nombre_socia = st.text_input("Nombre de la socia:")
+    cargo = st.text_input("Cargo:")
+
+    if st.button("➕ Agregar"):
+        if nombre_socia.strip() != "" and cargo.strip() != "":
+            cursor.execute("""
+                INSERT INTO comite_directiva (nombre_socia, cargo)
+                VALUES (%s, %s)
+            """, (nombre_socia, cargo))
+            con.commit()
+            st.success("Miembro agregado.")
+            st.rerun()
+        else:
+            st.warning("Debe ingresar todos los campos.")
+
+    st.write("### Miembros actuales")
+
+    for fila in filas:
+        col1, col2, col3 = st.columns([3, 2, 1])
+        col1.write(f"**{fila['nombre_socia']}**")
+        col2.write(fila["cargo"])
+        if col3.button("Eliminar", key=f"del_c{fila['id_comite']}"):
+            cursor.execute("DELETE FROM comite_directiva WHERE id_comite=%s", (fila["id_comite"],))
+            con.commit()
+            st.rerun()
+
+    cursor.close()
+    con.close()
 
 
-
-# ============================================================
-# 3. PERMISOS VÁLIDOS DE INASISTENCIA
-# ============================================================
+# ======================================================================
+# 3. PERMISOS DE INASISTENCIA (TABLA regla_permisos_inasistencia)
+# ======================================================================
 def mostrar_permisos():
-
     st.subheader("📝 Permisos válidos de inasistencia")
 
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
 
-    nuevo = st.text_input("Agregar nuevo permiso")
+    nuevo = st.text_input("Agregar nuevo permiso:")
 
     if st.button("➕ Registrar permiso"):
-        if nuevo.strip():
+        if nuevo.strip() != "":
             cursor.execute("""
                 INSERT INTO regla_permisos_inasistencia (descripcion)
                 VALUES (%s)
@@ -168,78 +162,79 @@ def mostrar_permisos():
             con.commit()
             st.success("Permiso registrado.")
             st.rerun()
-        else:
-            st.warning("Ingrese un texto válido.")
 
-    st.divider()
+    st.write("### Permisos registrados")
 
-    cursor.execute("SELECT id_permiso, descripcion FROM regla_permisos_inasistencia")
+    cursor.execute("SELECT * FROM regla_permisos_inasistencia ORDER BY id_permiso ASC")
     permisos = cursor.fetchall()
 
-    if not permisos:
+    if permisos:
+        for permiso in permisos:
+            col1, col2 = st.columns([4, 1])
+            col1.write(f"• {permiso['descripcion']}")
+            if col2.button("Eliminar", key=f"del_p{permiso['id_permiso']}"):
+                cursor.execute("DELETE FROM regla_permisos_inasistencia WHERE id_permiso=%s", (permiso["id_permiso"],))
+                con.commit()
+                st.rerun()
+    else:
         st.info("No hay permisos registrados.")
-        return
 
-    st.subheader("Permisos registrados:")
-    for p in permisos:
-        col1, col2 = st.columns([5, 1])
-        col1.write(p["descripcion"])
-        if col2.button("Eliminar", key=f"del{p['id_permiso']}"):
-            cursor.execute("DELETE FROM regla_permisos_inasistencia WHERE id_permiso=%s", (p["id_permiso"],))
-            con.commit()
-            st.rerun()
+    cursor.close()
+    con.close()
 
 
-
-# ============================================================
-# 4. EXPORTAR PDF
-# ============================================================
+# ======================================================================
+# 4. EXPORTAR PDF CON TODAS LAS REGLAS
+# ======================================================================
 def exportar_pdf():
-
     st.subheader("📄 Exportar todas las reglas en PDF")
 
-    if st.button("📥 Generar PDF"):
+    con = obtener_conexion()
+    cursor = con.cursor(dictionary=True)
 
-        con = obtener_conexion()
-        cursor = con.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM reglas_grupo ORDER BY id_regla ASC")
+    reglas = cursor.fetchall()
 
-        cursor.execute("SELECT * FROM reglas_grupo WHERE id_regla = 1")
-        datos = cursor.fetchone()
+    cursor.execute("SELECT * FROM comite_directiva ORDER BY id_comite ASC")
+    comite = cursor.fetchall()
 
-        if not datos:
-            st.error("No se encontraron reglas para exportar.")
-            return
+    cursor.execute("SELECT * FROM regla_permisos_inasistencia ORDER BY id_permiso ASC")
+    permisos = cursor.fetchall()
 
-        filename = "/mnt/data/reglas_internas.pdf"
+    buffer = []
 
-        styles = getSampleStyleSheet()
-        doc = SimpleDocTemplate(filename, pagesize=letter)
+    styles = getSampleStyleSheet()
+    estilo = styles["Normal"]
 
-        contenido = []
+    buffer.append(Paragraph("REGLAMENTO INTERNO DEL GRUPO", styles["Title"]))
+    buffer.append(Paragraph("<br/>", estilo))
 
-        contenido.append(Paragraph("<b>REGLAS INTERNAS DEL GRUPO</b>", styles["Title"]))
-        contenido.append(Spacer(1, 18))
+    if reglas:
+        r = reglas[0]
+        buffer.append(Paragraph(f"<b>Nombre del Grupo:</b> {r['nombre_grupo']}", estilo))
+        buffer.append(Paragraph(f"<b>Comunidad:</b> {r['nombre_comunidad']}", estilo))
+        buffer.append(Paragraph(f"<b>Multa por inasistencia:</b> ${r['multa_inasistencia']}", estilo))
+        buffer.append(Paragraph(f"<b>Ahorro mínimo:</b> ${r['ahorro_minimo']}", estilo))
+        buffer.append(Paragraph(f"<b>Interés por cada $10:</b> {r['interes_por_10']}%", estilo))
+        buffer.append(Paragraph(f"<b>Préstamo máximo:</b> ${r['prestamo_maximo']}", estilo))
+        buffer.append(Paragraph(f"<b>Plazo máximo:</b> {r['plazo_maximo']} meses", estilo))
+        buffer.append(Paragraph(f"<b>Otras reglas:</b><br/>{r['otras_reglas']}", estilo))
 
-        contenido.append(Paragraph(f"<b>Nombre del grupo:</b> {datos['nombre_grupo']}", styles["Normal"]))
-        contenido.append(Paragraph(f"<b>Comunidad:</b> {datos['nombre_comunidad']}", styles["Normal"]))
-        contenido.append(Paragraph(f"<b>Multa por inasistencia:</b> ${datos['multa_inasistencia']}", styles["Normal"]))
-        contenido.append(Paragraph(f"<b>Ahorro mínimo:</b> ${datos['ahorro_minimo']}", styles["Normal"]))
-        contenido.append(Paragraph(f"<b>Interés por cada $10 prestados:</b> {datos['interes_por_10']}%", styles["Normal"]))
-        contenido.append(Paragraph(f"<b>Préstamo máximo:</b> ${datos['prestamo_maximo']}", styles["Normal"]))
-        contenido.append(Paragraph(f"<b>Plazo máximo:</b> {datos['plazo_maximo']} meses", styles["Normal"]))
-        
-        contenido.append(Spacer(1, 12))
-        contenido.append(Paragraph("<b>Otras reglas:</b>", styles["Heading3"]))
-        contenido.append(Paragraph(datos["otras_reglas"], styles["Normal"]))
+    buffer.append(Paragraph("<br/><b>COMITÉ DIRECTIVO</b>", estilo))
+    for c in comite:
+        buffer.append(Paragraph(f"{c['nombre_socia']} — {c['cargo']}", estilo))
 
-        contenido.append(Spacer(1, 20))
-        contenido.append(Paragraph(f"Fecha de emisión: {datetime.date.today()}", styles["Normal"]))
+    buffer.append(Paragraph("<br/><b>PERMISOS VÁLIDOS DE INASISTENCIA</b>", estilo))
+    for p in permisos:
+        buffer.append(Paragraph(f"- {p['descripcion']}", estilo))
 
-        doc.build(contenido)
+    # PDF temporal
+    archivo = "reglamento_grupo.pdf"
+    pdf = SimpleDocTemplate(archivo, pagesize=letter)
+    pdf.build(buffer)
 
-        st.success("PDF generado correctamente.")
-        st.download_button(
-            "📥 Descargar PDF",
-            data=open(filename, "rb").read(),
-            file_name="reglas_internas.pdf"
-        )
+    with open(archivo, "rb") as f:
+        st.download_button("📥 Descargar PDF", data=f, file_name="reglamento_grupo.pdf")
+
+    cursor.close()
+    con.close()
