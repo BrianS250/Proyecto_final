@@ -315,7 +315,7 @@ def pagina_multas():
 
 
 # ============================================================
-# REGISTRO DE SOCIAS  (DUI con guion automático)
+# REGISTRO DE SOCIAS
 # ============================================================
 def pagina_registro_socias():
 
@@ -324,73 +324,76 @@ def pagina_registro_socias():
     con = obtener_conexion()
     cursor = con.cursor()
 
-    # --------------------------
-    # NOMBRE
-    # --------------------------
     nombre = st.text_input("Nombre completo")
 
-    # --------------------------
-    # DUI — guion automático después de 8 dígitos
-    # --------------------------
-    dui_raw = st.text_input("DUI (00000000-0)", max_chars=10)
+    # ----------------------------
+    # DUI (solo números, 9 dígitos)
+    # ----------------------------
+    dui_raw = st.text_input(
+        "DUI – Número de DUI",
+        max_chars=9,
+        placeholder="Solo números (9 dígitos)",
+    )
 
-    # Quitar cualquier cosa que no sea número
-    digitos = "".join([c for c in dui_raw if c.isdigit()])
+    # Sanitizar: quitar letras
+    dui_raw = ''.join(filter(str.isdigit, dui_raw))
 
-    # Limitar máximo a 9 dígitos
-    digitos = digitos[:9]
+    # Campo de confirmación
+    dui_confirm = st.text_input(
+        "Confirmar DUI",
+        max_chars=9,
+        placeholder="Reingrese el DUI",
+    )
+    dui_confirm = ''.join(filter(str.isdigit, dui_confirm))
 
-    # Construir DUI formateado automáticamente
-    if len(digitos) > 8:
-        dui_formateado = digitos[:8] + "-" + digitos[8]
-    else:
-        dui_formateado = digitos
+    # DUI final con guion
+    dui_formateado = None
+    if len(dui_raw) == 9:
+        dui_formateado = dui_raw[:8] + "-" + dui_raw[8]
 
-    # Mostrar el DUI formateado debajo del input (sin modificar el input directamente)
-    st.caption(f"🔎 DUI detectado: `{dui_formateado}`")
+    # ----------------------------
+    # Teléfono (solo números, 8 dígitos)
+    # ----------------------------
+    tel_raw = st.text_input(
+        "Teléfono (8 dígitos)",
+        max_chars=8,
+        placeholder="Ej: 70123456"
+    )
+    tel_raw = ''.join(filter(str.isdigit, tel_raw))
 
-    # --------------------------
-    # TELÉFONO — solo números
-    # --------------------------
-    tel_raw = st.text_input("Número de teléfono (8 dígitos)", max_chars=8)
-    telefono = "".join([c for c in tel_raw if c.isdigit()])
-    telefono = telefono[:8]
-
-    st.caption(f"📞 Teléfono detectado: `{telefono}`")
-
-    # --------------------------
-    # GUARDAR SOCIA
-    # --------------------------
     if st.button("Registrar socia"):
 
         if nombre.strip() == "":
             st.warning("Debe ingresar un nombre.")
             return
 
-        if len(digitos) != 9:
-            st.warning("El DUI debe contener 9 dígitos (00000000-0).")
+        if len(dui_raw) != 9:
+            st.error("El DUI debe tener exactamente 9 dígitos.")
             return
 
-        if len(telefono) != 8:
-            st.warning("El teléfono debe tener exactamente 8 dígitos.")
+        if dui_raw != dui_confirm:
+            st.error("El DUI ingresado no coincide con la confirmación.")
             return
 
+        if len(tel_raw) != 8:
+            st.error("El número de teléfono debe tener exactamente 8 dígitos.")
+            return
+
+        # Insertar en la base
         cursor.execute("""
             INSERT INTO Socia(Nombre, DUI, Telefono, Sexo)
             VALUES(%s, %s, %s, 'F')
-        """, (nombre, dui_formateado, telefono))
+        """, (nombre, dui_formateado, tel_raw))
 
         con.commit()
 
-        st.success("Socia registrada correctamente.")
+        st.success(f"Socia registrada correctamente: {nombre}")
         st.rerun()
 
-    # --------------------------
-    # MOSTRAR TABLA DE SOCIAS
-    # --------------------------
+    # Mostrar listado
     cursor.execute("SELECT Id_Socia, Nombre, DUI, Telefono FROM Socia ORDER BY Id_Socia ASC")
     datos = cursor.fetchall()
 
     if datos:
-        df = pd.DataFrame(datos, columns=["ID","Nombre","DUI","Telefono"])
+        df = pd.DataFrame(datos, columns=["ID", "Nombre", "DUI", "Telefono"])
         st.dataframe(df)
