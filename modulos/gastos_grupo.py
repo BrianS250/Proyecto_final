@@ -26,12 +26,12 @@ def gastos_grupo():
     responsable = st.text_input("👤 Nombre de la persona responsable del gasto")
 
     # --------------------------------------------------------
-    # DUI – OBLIGATORIO, EXACTO 9 NÚMEROS
+    # DUI (OPCIONAL EN TIEMPO REAL, OBLIGATORIO AL REGISTRAR)
     # --------------------------------------------------------
     dui_input = st.text_input("DUI (9 dígitos)", max_chars=9)
 
     # --------------------------------------------------------
-    # CONCEPTO / DESCRIPCIÓN – OPCIONAL
+    # CONCEPTO
     # --------------------------------------------------------
     descripcion = st.text_input("Concepto del gasto (opcional)")
 
@@ -41,59 +41,64 @@ def gastos_grupo():
     monto = st.number_input("Monto del gasto ($)", min_value=0.25, step=0.25)
 
     # --------------------------------------------------------
-    # SALDO DISPONIBLE
+    # SALDO
     # --------------------------------------------------------
     saldo = obtener_saldo_por_fecha(fecha)
     st.info(f"💰 Saldo disponible en caja para {fecha}: **${saldo:.2f}**")
 
     # --------------------------------------------------------
-    # BOTÓN PARA REGISTRO
+    # BOTÓN PARA REGISTRAR
     # --------------------------------------------------------
     if st.button("💳 Registrar gasto"):
 
-        # =======================
-        # VALIDACIONES
-        # =======================
+        # ======================================================
+        # 1. VALIDAR MONTO VS SALDO  (PRIORIDAD MÁXIMA)
+        # ======================================================
+        if monto > saldo:
+            st.error(
+                f"❌ No puede gastar ${monto:.2f}. "
+                f"El saldo disponible es ${saldo:.2f}."
+            )
+            return
 
-        # Responsable
+        # ======================================================
+        # 2. VALIDAR RESPONSABLE
+        # ======================================================
         if not responsable.strip():
             st.error("❌ Debe ingresar el nombre del responsable.")
             return
 
-        # DUI
+        # ======================================================
+        # 3. VALIDAR DUI (solo ahora, NO en tiempo real)
+        # ======================================================
         if not dui_input.isdigit() or len(dui_input) != 9:
             st.error("❌ El DUI debe tener exactamente 9 dígitos numéricos.")
             return
 
         dui_formateado = dui_input[:8] + "-" + dui_input[8:]
 
-        # Monto vs saldo
-        if monto > saldo:
-            st.error(f"❌ No puede gastar ${monto:.2f}. El saldo disponible es de ${saldo:.2f}.")
-            return
-
-        # =======================
-        # PROCESO DEL GASTO
-        # =======================
-
-        # 1. Obtener reunión del día
+        # ======================================================
+        # 4. OBTENER REUNIÓN Y REGISTRAR GASTO
+        # ======================================================
         id_caja = obtener_o_crear_reunion(fecha)
 
-        # 2. Registrar gasto en tabla Gastos_grupo
         cursor.execute("""
             INSERT INTO Gastos_grupo(Fecha_gasto, Descripcion, Monto, Responsable, DUI, Id_Caja)
             VALUES (%s, %s, %s, %s, %s, %s)
         """, (fecha, descripcion, monto, responsable, dui_formateado, id_caja))
         con.commit()
 
-        # 3. Registrar movimiento de caja (egreso)
-        registrar_movimiento(id_caja, "Egreso", f"Gasto – {descripcion if descripcion else 'Sin concepto'}", monto)
+        # ======================================================
+        # 5. REGISTRAR MOVIMIENTO DE CAJA
+        # ======================================================
+        concepto_real = descripcion if descripcion.strip() else "Sin concepto"
+        registrar_movimiento(id_caja, "Egreso", f"Gasto – {concepto_real}", monto)
 
         st.success("✔ Gasto registrado exitosamente.")
 
-        # --------------------------------------------------------
-        # GENERAR PDF RESUMEN
-        # --------------------------------------------------------
+        # ======================================================
+        # 6. GENERAR PDF
+        # ======================================================
         nombre_pdf = f"gasto_{fecha}_{responsable}.pdf"
 
         data = [
@@ -101,24 +106,23 @@ def gastos_grupo():
             ["Fecha", fecha],
             ["Responsable", responsable],
             ["DUI", dui_formateado],
-            ["Concepto", descripcion if descripcion else "No especificado"],
+            ["Concepto", concepto_real],
             ["Monto", f"${monto:.2f}"],
-            ["Saldo anterior", f"${saldo:.2f}"],
+            ["Saldo antes del gasto", f"${saldo:.2f}"],
             ["Saldo después del gasto", f"${saldo - monto:.2f}"],
         ]
 
         doc = SimpleDocTemplate(nombre_pdf, pagesize=letter)
-        tabla_pdf = Table(data)
-
-        tabla_pdf.setStyle(TableStyle([
+        tabla = Table(data)
+        tabla.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.gray),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("BOX", (0, 0), (-1, -1), 1, colors.black),
             ("GRID", (0, 0), (-1, -1), 1, colors.black),
+            ("BOX", (0, 0), (-1, -1), 1, colors.black),
         ]))
 
-        doc.build([tabla_pdf])
+        doc.build([tabla])
 
         with open(nombre_pdf, "rb") as f:
             st.download_button("📥 Descargar PDF del gasto", f, file_name=nombre_pdf)
