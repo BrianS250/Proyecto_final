@@ -13,6 +13,9 @@ from modulos.reporte_caja import reporte_caja
 # CAJA POR REUNIÓN (Opción A)
 from modulos.caja import obtener_o_crear_reunion, registrar_movimiento, obtener_saldo_por_fecha
 
+# NUEVO MÓDULO: OTROS GASTOS DEL GRUPO
+from modulos.gastos_grupo import gastos_grupo
+
 
 
 # ============================================================
@@ -31,7 +34,7 @@ def interfaz_directiva():
     st.title("👩‍💼 Panel de la Directiva del Grupo")
 
     # ============================================================
-    # NUEVA FECHA GLOBAL (manteniendo tu diseño original)
+    # NUEVA FECHA GLOBAL
     # ============================================================
     st.markdown("### 📅 Seleccione la fecha de reunión del reporte:")
 
@@ -46,7 +49,7 @@ def interfaz_directiva():
     st.session_state["fecha_global"] = fecha_sel
 
     # ============================================================
-    # MOSTRAR SALDO ACTUAL DE CAJA (AJUSTADO A FECHA)
+    # MOSTRAR SALDO ACTUAL DE CAJA
     # ============================================================
     try:
         saldo = obtener_saldo_por_fecha(fecha_sel)
@@ -69,6 +72,7 @@ def interfaz_directiva():
             "Autorizar préstamo",
             "Registrar pago de préstamo",
             "Registrar ahorro",
+            "Registrar otros gastos",   # ← AGREGADO
             "Reporte de caja"
         ]
     )
@@ -90,6 +94,9 @@ def interfaz_directiva():
 
     elif menu == "Registrar ahorro":
         ahorro()
+
+    elif menu == "Registrar otros gastos":   # ← AGREGADO
+        gastos_grupo()
 
     elif menu == "Reporte de caja":
         reporte_caja()
