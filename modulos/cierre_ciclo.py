@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import date
-from modulos.conexion import obtener_conexion
+from modulos.config.conexion import obtener_conexion
 
 def cierre_ciclo():
 
@@ -35,9 +35,9 @@ def cierre_ciclo():
     """)
     total_ing_extra = cursor.fetchone()[0]
 
-    # 🔧 TABLA CORRECTA — tal como aparece en tu BD
+    # 🔧 TABLA Y COLUMNAS CORRECTAS (con espacios y tildes)
     cursor.execute("""
-        SELECT IFNULL(SUM(Monto_abonado + Interes_pagado),0)
+        SELECT IFNULL(SUM(`Monto abonado` + `Interés pagado`),0)
         FROM `Pago del prestamo`
     """)
     total_pagos = cursor.fetchone()[0]
