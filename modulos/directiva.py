@@ -1,314 +1,311 @@
 import streamlit as st
+import pandas as pd
 from datetime import date
+
 from modulos.conexion import obtener_conexion
 
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
+# MÓDULOS EXTERNOS
+from modulos.autorizar_prestamo import autorizar_prestamo
+from modulos.pago_prestamo import pago_prestamo
+from modulos.ahorro import ahorro
+from modulos.reporte_caja import reporte_caja
+
+# CAJA POR REUNIÓN (Opción A)
+from modulos.caja import obtener_o_crear_reunion, registrar_movimiento, obtener_saldo_por_fecha
+
+# OTROS GASTOS
+from modulos.gastos_grupo import gastos_grupo
+
+# CIERRE DE CICLO
+from modulos.cierre_ciclo import cierre_ciclo
+
+# REGLAS INTERNAS (NUEVO)
+from modulos.reglas import gestionar_reglas
 
 
 
 # ============================================================
-# FUNCIÓN PRINCIPAL DEL MÓDULO
+# PANEL PRINCIPAL
 # ============================================================
-def gestionar_reglas():
-    st.header("📘 Reglas Internas del Grupo de Ahorro")
+def interfaz_directiva():
 
-    con = obtener_conexion()
-    cursor = con.cursor(dictionary=True)
+    rol = st.session_state.get("rol", "")
 
-    # Buscar si ya existen reglas
-    cursor.execute("SELECT * FROM reglas_grupo ORDER BY id_regla DESC LIMIT 1")
-    reglas = cursor.fetchone()
+    # Seguridad de acceso
+    if rol != "Director":
+        st.title("Acceso denegado")
+        st.warning("Solo el Director puede acceder a esta sección.")
+        return
 
-    if reglas:
-        mostrar_reglas(reglas)
-    else:
-        st.info("Aún no hay reglas registradas. Complete el siguiente formulario:")
-        crear_reglas()
+    st.title("👩‍💼 Panel de la Directiva del Grupo")
 
-    cursor.close()
-    con.close()
+    # ============================================================
+    # NUEVA FECHA GLOBAL
+    # ============================================================
+    st.markdown("### 📅 Seleccione la fecha de reunión del reporte:")
 
+    if "fecha_global" not in st.session_state:
+        st.session_state["fecha_global"] = date.today().strftime("%Y-%m-%d")
 
+    fecha_sel = st.date_input(
+        "Fecha del reporte",
+        value=pd.to_datetime(st.session_state["fecha_global"])
+    ).strftime("%Y-%m-%d")
 
-# ============================================================
-# CREAR REGLAS INTERNAS
-# ============================================================
-def crear_reglas():
-    with st.form("form_reglas"):
+    st.session_state["fecha_global"] = fecha_sel
 
-        st.subheader("📝 Información general")
-        nombre_grupo = st.text_input("Nombre del grupo de ahorro")
-        comunidad = st.text_input("Nombre de la comunidad")
-        fecha_formacion = st.date_input("Fecha de formación")
+    # ============================================================
+    # MOSTRAR SALDO ACTUAL DE CAJA
+    # ============================================================
+    try:
+        saldo = obtener_saldo_por_fecha(fecha_sel)
+        st.info(f"💰 Saldo de caja para {fecha_sel}: **${saldo:.2f}**")
+    except:
+        st.warning("⚠ Error al obtener el saldo de caja.")
 
-        st.subheader("💰 Ahorros y multas")
-        multa = st.number_input("Multa por inasistencia ($)", min_value=0.0)
-        ahorro_minimo = st.number_input("Ahorro mínimo ($)", min_value=0.0)
+    # Cerrar sesión
+    if st.sidebar.button("🔒 Cerrar sesión"):
+        st.session_state.clear()
+        st.rerun()
 
-        st.subheader("💵 Préstamos")
-        interes = st.number_input("Interés por cada $10 prestados (%)", min_value=0.0)
-        prestamo_maximo = st.number_input("Monto máximo de préstamo", min_value=0.0)
-        plazo_maximo = st.number_input("Plazo máximo del préstamo (meses)", min_value=1)
-
-        st.subheader("🔁 Ciclo del grupo")
-        ciclo_inicio = st.date_input("Inicio del ciclo")
-        ciclo_fin = st.date_input("Fin del ciclo")
-
-        st.subheader("🎯 Meta social")
-        meta = st.text_area("Meta social")
-
-        otras = st.text_area("Otras reglas")
-
-        enviar = st.form_submit_button("💾 Guardar reglas")
-
-        if enviar:
-            con = obtener_conexion()
-            cursor = con.cursor()
-
-            cursor.execute("""
-                INSERT INTO reglas_grupo
-                (Id_Grupo, nombre_grupo, nombre_comunidad, fecha_formacion,
-                multa_inasistencia, ahorro_minimo, interes_por_10,
-                prestamo_maximo, plazo_maximo, ciclo_inicio, ciclo_fin,
-                meta_social, otras_reglas)
-                VALUES (1, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                nombre_grupo, comunidad, fecha_formacion,
-                multa, ahorro_minimo, interes,
-                prestamo_maximo, plazo_maximo,
-                ciclo_inicio, ciclo_fin,
-                meta, otras
-            ))
-
-            con.commit()
-            con.close()
-
-            st.success("Reglas internas registradas correctamente.")
-            st.rerun()
-
-
-
-# ============================================================
-# MOSTRAR REGLAS INTERNAS
-# ============================================================
-def mostrar_reglas(reglas):
-
-    st.subheader("📌 Información General")
-    st.write(f"**Nombre del grupo:** {reglas['nombre_grupo']}")
-    st.write(f"**Comunidad:** {reglas['nombre_comunidad']}")
-    st.write(f"**Fecha de formación:** {reglas['fecha_formacion']}")
-
-    st.subheader("💰 Ahorros y Multas")
-    st.write(f"- Multa por inasistencia: **${reglas['multa_inasistencia']}**")
-    st.write(f"- Ahorro mínimo obligatorio: **${reglas['ahorro_minimo']}**")
-
-    st.subheader("💵 Reglas de Préstamo")
-    st.write(f"- Interés por cada $10 prestados: **{reglas['interes_por_10']}%**")
-    st.write(f"- Monto máximo del préstamo: **${reglas['prestamo_maximo']}**")
-    st.write(f"- Plazo máximo del préstamo: **{reglas['plazo_maximo']} meses**")
-
-    st.subheader("🔁 Ciclo del Grupo")
-    st.write(f"- Inicio del ciclo: {reglas['ciclo_inicio']}")
-    st.write(f"- Fin del ciclo: {reglas['ciclo_fin']}")
-
-    st.subheader("🎯 Meta Social")
-    st.write(reglas["meta_social"])
-
-    st.subheader("📄 Otras reglas")
-    st.write(reglas["otras_reglas"])
-
-    st.markdown("---")
-
-    # =====================================
-    #   PANEL DEL COMITÉ DIRECTIVO
-    # =====================================
-    mostrar_comite(reglas)
-
-    st.markdown("---")
-
-    # =====================================
-    #   PANEL DE PERMISOS DE INASISTENCIA
-    # =====================================
-    mostrar_permisos(reglas)
-
-    st.markdown("---")
-
-    # =====================================
-    #   EDITOR DE REGLAS INTERNAS
-    # =====================================
-    editor_reglas(reglas)
-
-    st.markdown("---")
-
-    # =====================================
-    #   EXPORTAR PDF
-    # =====================================
-    exportar_pdf(reglas)
-
-
-
-
-# ============================================================
-# COMITÉ DIRECTIVO
-# ============================================================
-def mostrar_comite(reglas):
-
-    st.subheader("👩‍💼 Comité Directivo")
-
-    con = obtener_conexion()
-    cursor = con.cursor(dictionary=True)
-
-    cargo = st.selectbox(
-        "Cargo",
-        ["Presidenta", "Secretaria", "Tesorera", "Responsable de llave", "Otro"]
+    # ============================================================
+    # MENÚ LATERAL (AQUÍ SE AGREGA LA OPCIÓN NUEVA)
+    # ============================================================
+    menu = st.sidebar.radio(
+        "Selección rápida:",
+        [
+            "Registro de asistencia",
+            "Aplicar multas",
+            "Registrar nuevas socias",
+            "Autorizar préstamo",
+            "Registrar pago de préstamo",
+            "Registrar ahorro",
+            "Registrar otros gastos",
+            "Cierre de ciclo",
+            "Reporte de caja",
+            "Reglas internas"      # ← OPCIÓN AGREGADA
+        ]
     )
 
-    nombre = st.text_input("Nombre de la socia")
+    # ============================================================
+    # NAVEGACIÓN ENTRE PÁGINAS
+    # ============================================================
 
-    if st.button("➕ Agregar integrante"):
-        cursor.execute("""
-            INSERT INTO comite_directiva (Id_Regla, cargo, nombre_socia)
-            VALUES (%s, %s, %s)
-        """, (reglas["id_regla"], cargo, nombre))
-        con.commit()
-        st.success("Integrante agregado.")
-        st.rerun()
+    if menu == "Registro de asistencia":
+        pagina_asistencia()
 
-    cursor.execute("""
-        SELECT cargo, nombre_socia
-        FROM comite_directiva
-        WHERE Id_Regla=%s
-    """, (reglas["id_regla"],))
-    comite = cursor.fetchall()
+    elif menu == "Aplicar multas":
+        pagina_multas()
 
-    if comite:
-        st.table(comite)
+    elif menu == "Registrar nuevas socias":
+        pagina_registro_socias()
 
-    cursor.close()
-    con.close()
+    elif menu == "Autorizar préstamo":
+        autorizar_prestamo()
 
+    elif menu == "Registrar pago de préstamo":
+        pago_prestamo()
+
+    elif menu == "Registrar ahorro":
+        ahorro()
+
+    elif menu == "Registrar otros gastos":
+        gastos_grupo()
+
+    elif menu == "Cierre de ciclo":
+        cierre_ciclo()
+
+    elif menu == "Reporte de caja":
+        reporte_caja()
+
+    elif menu == "Reglas internas":
+        gestionar_reglas()
 
 
 
 # ============================================================
-# PERMISOS DE INASISTENCIA
+# ASISTENCIA + INGRESOS EXTRAORDINARIOS
 # ============================================================
-def mostrar_permisos(reglas):
+def pagina_asistencia():
 
-    st.subheader("📝 Permisos válidos de inasistencia")
+    st.header("📝 Registro de asistencia")
 
     con = obtener_conexion()
-    cursor = con.cursor(dictionary=True)
+    cursor = con.cursor()
 
-    permiso = st.text_input("Agregar nuevo permiso")
+    fecha_raw = st.date_input("📅 Fecha de la reunión", date.today())
+    fecha = fecha_raw.strftime("%Y-%m-%d")
 
-    if st.button("➕ Registrar permiso"):
+    cursor.execute("SELECT Id_Reunion FROM Reunion WHERE Fecha_reunion=%s", (fecha,))
+    row = cursor.fetchone()
+
+    if row:
+        id_reunion = row[0]
+    else:
         cursor.execute("""
-            INSERT INTO reglas_permisos_inasistencia (Id_Regla, descripcion)
-            VALUES (%s, %s)
-        """, (reglas["id_regla"], permiso))
+            INSERT INTO Reunion(Fecha_reunion, Observaciones, Acuerdos, Tema_central, Id_Grupo)
+            VALUES(%s,'','','',1)
+        """, (fecha,))
         con.commit()
-        st.success("Permiso registrado.")
-        st.rerun()
+        id_reunion = cursor.lastrowid
+        st.success(f"Reunión creada (ID {id_reunion}).")
 
-    cursor.execute("""
-        SELECT descripcion
-        FROM reglas_permisos_inasistencia
-        WHERE Id_Regla=%s
-    """, (reglas["id_regla"],))
-    lista = cursor.fetchall()
+    cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
+    socias = cursor.fetchall()
 
-    if lista:
-        st.table(lista)
+    st.subheader("Lista de asistencia")
+    registro = {}
 
-    cursor.close()
-    con.close()
+    for id_socia, nombre in socias:
+        estado = st.selectbox(
+            f"{id_socia} - {nombre}",
+            ["SI", "NO"],
+            key=f"as_{id_socia}"
+        )
+        registro[id_socia] = estado
 
-
-
-
-# ============================================================
-# EDITOR DE REGLAS INTERNAS
-# ============================================================
-def editor_reglas(reglas):
-
-    st.subheader("✏️ Editar Reglas Internas")
-
-    if st.checkbox("Mostrar editor"):
-
-        nueva_multa = st.number_input("Nueva multa ($)", value=reglas["multa_inasistencia"])
-        nuevo_ahorro = st.number_input("Nuevo ahorro mínimo ($)", value=reglas["ahorro_minimo"])
-        nuevo_interes = st.number_input("Nuevo interés por cada $10", value=reglas["interes_por_10"])
-        nueva_meta = st.text_area("Meta social", value=reglas["meta_social"])
-        nuevas_otras = st.text_area("Otras reglas", value=reglas["otras_reglas"])
-
-        if st.button("💾 Guardar cambios"):
-            con = obtener_conexion()
-            cursor = con.cursor()
+    if st.button("💾 Guardar asistencia"):
+        for id_socia, valor in registro.items():
+            est = "Presente" if valor == "SI" else "Ausente"
 
             cursor.execute("""
-                UPDATE reglas_grupo
-                SET multa_inasistencia=%s,
-                    ahorro_minimo=%s,
-                    interes_por_10=%s,
-                    meta_social=%s,
-                    otras_reglas=%s
-                WHERE id_regla=%s
-            """, (
-                nueva_multa, nuevo_ahorro, nuevo_interes,
-                nueva_meta, nuevas_otras,
-                reglas["id_regla"]
-            ))
+                SELECT Id_Asistencia
+                FROM Asistencia
+                WHERE Id_Reunion=%s AND Id_Socia=%s
+            """, (id_reunion, id_socia))
+            existe = cursor.fetchone()
 
-            con.commit()
-            con.close()
+            if existe:
+                cursor.execute("""
+                    UPDATE Asistencia 
+                    SET Estado_asistencia=%s, Fecha=%s
+                    WHERE Id_Reunion=%s AND Id_Socia=%s
+                """, (est, fecha, id_reunion, id_socia))
+            else:
+                cursor.execute("""
+                    INSERT INTO Asistencia(Id_Reunion,Id_Socia,Estado_asistencia,Fecha)
+                    VALUES(%s,%s,%s,%s)
+                """, (id_reunion, id_socia, est, fecha))
 
-            st.success("Reglas actualizadas.")
-            st.rerun()
+        con.commit()
+        st.success("Asistencia registrada.")
 
+    cursor.execute("""
+        SELECT S.Nombre, A.Estado_asistencia
+        FROM Asistencia A
+        JOIN Socia S ON S.Id_Socia=A.Id_Socia
+        WHERE A.Id_Reunion=%s
+    """, (id_reunion,))
+    datos = cursor.fetchall()
+
+    if datos:
+        df = pd.DataFrame(datos, columns=["Socia", "Asistencia"])
+        st.dataframe(df)
+
+    st.markdown("---")
+
+    # -----------------------------------------------------------
+    # INGRESOS EXTRAORDINARIOS
+    # -----------------------------------------------------------
+
+    st.header("💰 Ingresos extraordinarios")
+
+    cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
+    socias = cursor.fetchall()
+    opciones = {nombre: id_s for id_s, nombre in socias}
+
+    socia_sel = st.selectbox("Socia:", opciones.keys())
+    id_socia = opciones[socia_sel]
+
+    tipo = st.selectbox("Tipo", ["Rifa", "Donación", "Actividad", "Otro"])
+    descripcion = st.text_input("Descripción")
+    monto = st.number_input("Monto ($)", min_value=0.25, step=0.25)
+
+    if st.button("➕ Registrar ingreso extraordinario"):
+
+        cursor.execute("""
+            INSERT INTO IngresosExtra(Id_Reunion,Id_Socia,Tipo,Descripcion,Monto,Fecha)
+            VALUES(%s,%s,%s,%s,%s,%s)
+        """, (id_reunion, id_socia, tipo, descripcion, monto, fecha))
+
+        con.commit()
+
+        id_caja = obtener_o_crear_reunion(fecha)
+        registrar_movimiento(id_caja, "Ingreso", f"Ingreso Extra – {tipo}", monto)
+
+        st.success("Ingreso extraordinario registrado y sumado a caja.")
+        st.rerun()
 
 
 
 # ============================================================
-# EXPORTACIÓN A PDF
+# MULTAS
 # ============================================================
-def exportar_pdf(reglas):
+def pagina_multas():
 
-    st.subheader("📄 Exportar a PDF")
+    st.header("⚠️ Aplicación de multas")
 
-    if st.button("📥 Generar PDF"):
+    con = obtener_conexion()
+    cursor = con.cursor()
 
-        crear_pdf_reglas(reglas)
+    cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
+    socias = cursor.fetchall()
+    opciones = {nombre: id_s for id_s, nombre in socias}
 
-        with open("reglas_internas.pdf", "rb") as pdf:
-            st.download_button(
-                "📥 Descargar PDF",
-                data=pdf,
-                file_name="reglas_internas.pdf",
-                mime="application/pdf"
-            )
+    socia_sel = st.selectbox("Socia:", opciones.keys())
+    id_socia = opciones[socia_sel]
 
-        st.success("PDF generado correctamente.")
+    cursor.execute("SELECT Id_Tipo_multa, `Tipo de multa` FROM `Tipo de multa`")
+    tipos = cursor.fetchall()
+    lista_tipos = {nombre: id_t for id_t, nombre in tipos}
+
+    tipo_sel = st.selectbox("Tipo:", lista_tipos.keys())
+    id_tipo = lista_tipos[tipo_sel]
+
+    monto = st.number_input("Monto ($)", min_value=0.25, step=0.25)
+    fecha_raw = st.date_input("Fecha", date.today())
+    fecha = fecha_raw.strftime("%Y-%m-%d")
+    estado = st.selectbox("Estado:", ["A pagar", "Pagada"])
+
+    if st.button("💾 Registrar multa"):
+        cursor.execute("""
+            INSERT INTO Multa(Monto,Fecha_aplicacion,Estado,Id_Tipo_multa,Id_Socia)
+            VALUES(%s,%s,%s,%s,%s)
+        """, (monto, fecha, estado, id_tipo, id_socia))
+
+        con.commit()
+        st.success("Multa registrada.")
+        st.rerun()
 
 
 
-def crear_pdf_reglas(reglas):
+# ============================================================
+# SOCIAS
+# ============================================================
+def pagina_registro_socias():
 
-    c = canvas.Canvas("reglas_internas.pdf", pagesize=letter)
-    y = 750
+    st.header("👩‍🦰 Registro de nuevas socias")
 
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(50, y, "REGLAS INTERNAS DEL GRUPO")
-    y -= 30
+    con = obtener_conexion()
+    cursor = con.cursor()
 
-    c.setFont("Helvetica", 10)
+    nombre = st.text_input("Nombre completo")
 
-    for campo, valor in reglas.items():
-        c.drawString(50, y, f"{campo}: {valor}")
-        y -= 15
-        if y < 50:
-            c.showPage()
-            y = 750
+    if st.button("Registrar socia"):
 
-    c.save()
+        if nombre.strip() == "":
+            st.warning("Debe ingresar un nombre.")
+            return
+
+        cursor.execute("INSERT INTO Socia(Nombre,Sexo) VALUES(%s,'F')", (nombre,))
+        con.commit()
+
+        st.success("Socia registrada.")
+        st.rerun()
+
+    cursor.execute("SELECT Id_Socia,Nombre FROM Socia ORDER BY Id_Socia ASC")
+    datos = cursor.fetchall()
+
+    if datos:
+        df = pd.DataFrame(datos, columns=["ID","Nombre"])
+        st.dataframe(df)
