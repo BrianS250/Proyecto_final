@@ -19,7 +19,7 @@ def cierre_ciclo():
 
     id_ciclo, nombre_ciclo, fecha_inicio = ciclo
 
-    st.info(f"📌 Ciclo activo: **{nombre_ciclo}** (Inició: {fecha_inicio})")
+    st.info(f"📌 Ciclo activo: **{nombre_ciclo}** (Inició el {fecha_inicio})")
 
     # 2️⃣ INGRESOS DEL CICLO
     cursor.execute("""
@@ -35,9 +35,10 @@ def cierre_ciclo():
     """)
     total_ing_extra = cursor.fetchone()[0]
 
+    # 🔧 CORREGIDO → tabla con espacios
     cursor.execute("""
         SELECT IFNULL(SUM(Monto_abonado + Interes_pagado),0)
-        FROM Pago_del_prestamo
+        FROM `Pago del prestamo`
     """)
     total_pagos = cursor.fetchone()[0]
 
