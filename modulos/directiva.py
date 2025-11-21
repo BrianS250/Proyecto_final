@@ -315,7 +315,7 @@ def pagina_multas():
 
 
 # ============================================================
-# REGISTRO DE SOCIAS  (CON DUI AUTOMÁTICO Y TELÉFONO SOLO NÚMEROS)
+# REGISTRO DE SOCIAS  (YA CORREGIDO COMPLETO)
 # ============================================================
 def pagina_registro_socias():
 
@@ -324,28 +324,33 @@ def pagina_registro_socias():
     con = obtener_conexion()
     cursor = con.cursor()
 
+    # --------------------------
+    # NOMBRE
+    # --------------------------
     nombre = st.text_input("Nombre completo")
 
     # --------------------------
-    # DUI – autoformato
+    # DUI – guion automático después de 8 números
     # --------------------------
     dui_raw = st.text_input(
-        "DUI (8 números y guion automático)",
+        "DUI (formato automático 00000000-0)",
         max_chars=10,
         key="dui_input"
     )
 
-    # Limpiar entradas no numéricas
+    # Quitar todo lo que no sea número
     numeros = "".join([c for c in dui_raw if c.isdigit()])
+
+    # Limitar a 9 números máximo
+    numeros = numeros[:9]
 
     # Insertar guion automáticamente
     if len(numeros) > 8:
-        numeros = numeros[:9]      # máximo 9 dígitos (8 + 1)
         dui_formateado = numeros[:8] + "-" + numeros[8:]
     else:
         dui_formateado = numeros
 
-    # Mostrar DUI formateado
+    # Actualizar el campo si cambió
     if dui_formateado != dui_raw:
         st.session_state["dui_input"] = dui_formateado
         st.experimental_rerun()
@@ -353,53 +358,54 @@ def pagina_registro_socias():
     dui = dui_formateado
 
     # --------------------------
-    # TELÉFONO – solo números
+    # TELÉFONO – solo números, 8 dígitos
     # --------------------------
     telefono_raw = st.text_input(
-        "Teléfono (8 dígitos)",
+        "Número de teléfono (8 dígitos, solo números)",
         max_chars=8,
         key="tel_input"
     )
 
-    telefono = "".join([c for c in telefono_raw if c.isdigit()])
+    tel_numeros = "".join([c for c in telefono_raw if c.isdigit()])
+    tel_numeros = tel_numeros[:8]
 
-    if telefono != telefono_raw:
-        st.session_state["tel_input"] = telefono
+    if tel_numeros != telefono_raw:
+        st.session_state["tel_input"] = tel_numeros
         st.experimental_rerun()
 
+    telefono = tel_numeros
+
     # --------------------------
-    # BOTÓN GUARDAR
+    # GUARDAR SOCIA
     # --------------------------
     if st.button("Registrar socia"):
 
-        if nombre.strip() == "" or dui.strip() == "" or telefono.strip() == "":
-            st.warning("Debe completar todos los campos.")
+        if nombre.strip() == "":
+            st.warning("Debe ingresar un nombre.")
             return
 
-        # Validación final DUI
-        if len(dui) != 10 or dui[8] != "-":
-            st.error("❌ DUI incorrecto. Debe ser: 00000000-0")
+        if len(dui) != 10 or "-" not in dui:
+            st.warning("El DUI no es válido. Debe ser 00000000-0")
             return
 
-        # Validación final teléfono
         if len(telefono) != 8:
-            st.error("❌ El teléfono debe tener exactamente 8 dígitos.")
+            st.warning("El número de teléfono debe tener 8 dígitos.")
             return
 
         cursor.execute("""
-            INSERT INTO Socia (Nombre, DUI, Telefono, Sexo)
-            VALUES (%s, %s, %s, 'F')
+            INSERT INTO Socia(Nombre, DUI, Telefono, Sexo)
+            VALUES(%s, %s, %s, 'F')
         """, (nombre, dui, telefono))
+
         con.commit()
 
         st.success("Socia registrada correctamente.")
         st.rerun()
 
-    # Mostrar socias registradas
+    # Mostrar lista
     cursor.execute("SELECT Id_Socia, Nombre, DUI, Telefono FROM Socia ORDER BY Id_Socia ASC")
     datos = cursor.fetchall()
 
     if datos:
-        df = pd.DataFrame(datos, columns=["ID", "Nombre", "DUI", "Teléfono"])
+        df = pd.DataFrame(datos, columns=["ID","Nombre","DUI","Telefono"])
         st.dataframe(df)
-
