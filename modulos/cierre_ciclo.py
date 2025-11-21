@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import date
-from modulos.config.conexion import obtener_conexion
+from modulos.conexion import obtener_conexion
 
 def cierre_ciclo():
 
@@ -16,22 +16,22 @@ def cierre_ciclo():
     ciclo = cursor.fetchone()
 
     if not ciclo:
-        st.error("❌ No existe un ciclo activo.")
+        st.error("❌ No existe un ciclo activo. Debes abrir uno antes de cerrar.")
         return
 
     id_ciclo, nombre_ciclo, fecha_inicio = ciclo
 
-    st.info(f"📌 Ciclo activo: **{nombre_ciclo}** (Inició: {fecha_inicio})")
+    st.info(f"📌 Ciclo activo: **{nombre_ciclo}** (Iniciado el {fecha_inicio})")
 
     # --------------------------------------------------------------
-    # 2️⃣ SUMAR INGRESOS DEL CICLO
+    # 2️⃣ INGRESOS DEL CICLO
     # --------------------------------------------------------------
 
     # MULTAS PAGADAS
     cursor.execute("""
         SELECT IFNULL(SUM(Monto),0)
-        FROM multa
-        WHERE Estado='pagada'
+        FROM Multa
+        WHERE Estado='Pagada'
     """)
     total_multas = cursor.fetchone()[0]
 
@@ -52,9 +52,10 @@ def cierre_ciclo():
     total_ingresos = total_multas + total_ing_extra + total_pagos
 
     # --------------------------------------------------------------
-    # 3️⃣ SUMAR EGRESOS DEL CICLO
+    # 3️⃣ EGRESOS DEL CICLO
     # --------------------------------------------------------------
 
+    # PRÉSTAMOS ENTREGADOS
     cursor.execute("""
         SELECT IFNULL(SUM(Monto_prestado),0)
         FROM Prestamo
@@ -64,25 +65,27 @@ def cierre_ciclo():
     total_egresos = total_prestamos
 
     # --------------------------------------------------------------
-    # 4️⃣ CÁLCULOS FINALES DEL CICLO
+    # 4️⃣ CÁLCULOS FINALES
     # --------------------------------------------------------------
 
     saldo_inicial = 0.00
     monto_repartido = (saldo_inicial + total_ingresos) - total_egresos
-    saldo_final = 0.00   # regla oficial
+
+    # El saldo final SIEMPRE queda en 0.00 (regla oficial)
+    saldo_final = 0.00
 
     st.subheader("📊 Resumen del ciclo")
 
-    st.write(f"💰 **Total de ingresos del ciclo:** ${total_ingresos:,.2f}")
-    st.write(f"🏦 **Total de egresos del ciclo:** ${total_egresos:,.2f}")
+    st.write(f"💰 **Total ingresos:** ${total_ingresos:,.2f}")
+    st.write(f"🏦 **Total egresos:** ${total_egresos:,.2f}")
     st.write("---")
-    st.success(f"🧮 **Monto a repartir:** ${monto_repartido:,.2f}")
-    st.info("El saldo final del ciclo será **$0.00** porque todo el dinero se reparte.")
+
+    st.success(f"🧮 **Monto a repartir a las socias:** ${monto_repartido:,.2f}")
+    st.info("📌 El saldo final queda automáticamente en **$0.00** porque todo se reparte.")
 
     # --------------------------------------------------------------
-    # 5️⃣ BOTÓN DE CIERRE
+    # 5️⃣ BOTÓN PARA CERRAR EL CICLO
     # --------------------------------------------------------------
-
     if st.button("🔒 Cerrar ciclo ahora"):
 
         cursor.execute("""
@@ -95,5 +98,5 @@ def cierre_ciclo():
 
         con.commit()
 
-        st.success("✔ Ciclo cerrado exitosamente. El saldo final es 0.00.")
+        st.success("✔ Ciclo cerrado correctamente. El saldo final es $0.00.")
         st.rerun()
