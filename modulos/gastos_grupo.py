@@ -25,53 +25,55 @@ def gastos_grupo():
     # --------------------------------------------------------
     responsable = st.text_input("👤 Nombre de la persona responsable del gasto")
 
+    # --------------------------------------------------------
     # DUI SOLO 9 NÚMEROS
+    # --------------------------------------------------------
     dui_input = st.text_input("DUI (9 dígitos)", max_chars=9)
 
     if dui_input and (not dui_input.isdigit() or len(dui_input) > 9):
         st.warning("⚠️ El DUI debe contener solo números y un máximo de 9 dígitos.")
         return
 
-    # Formato final del DUI para la base de datos (8 dígitos + guion + dígito)
     dui_formateado = dui_input[:8] + "-" + dui_input[8:] if len(dui_input) == 9 else None
 
     # --------------------------------------------------------
-    # DESCRIPCIÓN DEL GASTO
+    # DESCRIPCIÓN
     # --------------------------------------------------------
     descripcion = st.text_input("Descripción del gasto")
 
     # --------------------------------------------------------
-    # MONTO DEL GASTO
+    # MONTO
     # --------------------------------------------------------
     monto = st.number_input("Monto del gasto ($)", min_value=0.25, step=0.25)
 
     # --------------------------------------------------------
-    # SALDO DISPONIBLE EN CAJA
+    # SALDO DISPONIBLE
     # --------------------------------------------------------
     saldo = obtener_saldo_por_fecha(fecha)
     st.info(f"💰 Saldo disponible en caja para {fecha}: **${saldo:.2f}**")
 
     # --------------------------------------------------------
-    # BOTÓN PARA REGISTRAR GASTO
+    # BOTÓN PARA REGISTRO
     # --------------------------------------------------------
     if st.button("💳 Registrar gasto"):
 
-        # NO MOSTRAR MENSAJE – SOLO BLOQUEAR EL REGISTRO
+        # Validación de monto mayor al saldo
         if monto > saldo:
+            st.error("❌ El monto del gasto NO puede ser mayor al saldo disponible en caja.")
             return
 
-        # Obtener Id_Caja de la reunión
+        # Obtener ID de la caja asociada a esa fecha
         id_caja = obtener_o_crear_reunion(fecha)
 
-        # Registrar gasto en tabla Gastos_grupo
+        # Registrar gasto
         cursor.execute("""
             INSERT INTO Gastos_grupo(Fecha_gasto, Descripcion, Monto, Responsable, DUI, Id_Caja)
             VALUES (%s, %s, %s, %s, %s, %s)
         """, (fecha, descripcion, monto, responsable, dui_formateado, id_caja))
         con.commit()
 
-        # Registrar movimiento en caja (egreso)
+        # Registrar EGRESO en caja
         registrar_movimiento(id_caja, "Egreso", f"Gasto – {descripcion}", monto)
 
-        st.success("✔ Gasto registrado correctamente.")
+        st.success("✔ Gasto registrado exitosamente.")
         st.rerun()
