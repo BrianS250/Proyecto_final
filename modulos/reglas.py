@@ -3,8 +3,6 @@ import pandas as pd
 from datetime import date
 from modulos.conexion import obtener_conexion
 
-# 👉 Importación del módulo de reglas internas
-from modulos.reglas import gestionar_reglas
 
 
 # ---------------------------------------------------------
