@@ -118,19 +118,16 @@ def interfaz_directiva():
     elif menu == "Reporte de caja":
         reporte_caja()
 
-    # ============================================================
-    # NUEVO MÓDULO REGLAS INTERNAS
-    # ============================================================
     elif menu == "Reglas internas":
-        gestionar_reglas()      # ← ESTE ES EL NUEVO MÓDULO
+        gestionar_reglas()
 
 
 
 # ============================================================
 # ASISTENCIA + INGRESOS EXTRAORDINARIOS
-# (TU CÓDIGO ORIGINAL, NO SE MODIFICA)
 # ============================================================
 def pagina_asistencia():
+
     st.header("📝 Registro de asistencia")
 
     con = obtener_conexion()
@@ -163,7 +160,7 @@ def pagina_asistencia():
         estado = st.selectbox(
             f"{id_socia} - {nombre}",
             ["SI", "NO"],
-            key=f"asis_{id_socia}"
+            key=f"as_{id_socia}"
         )
         registro[id_socia] = estado
 
@@ -207,11 +204,12 @@ def pagina_asistencia():
 
     st.markdown("---")
 
-    # INGRESOS EXTRAORDINARIOS...
-    # (NO MUEVO NADA — TU CÓDIGO SIGUE IGUAL)
+    # -----------------------------------------------------------
+    # INGRESOS EXTRAORDINARIOS
     # -----------------------------------------------------------
 
     st.header("💰 Ingresos extraordinarios")
+
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
     opciones = {nombre: id_s for id_s, nombre in socias}
@@ -241,9 +239,10 @@ def pagina_asistencia():
 
 
 # ============================================================
-# MULTAS (SIN CAMBIOS)
+# MULTAS
 # ============================================================
 def pagina_multas():
+
     st.header("⚠️ Aplicación de multas")
 
     con = obtener_conexion()
@@ -279,22 +278,28 @@ def pagina_multas():
         st.rerun()
 
 
+
 # ============================================================
-# SOCIAS (NO MODIFICADO)
+# SOCIAS
 # ============================================================
 def pagina_registro_socias():
+
     st.header("👩‍🦰 Registro de nuevas socias")
+
     con = obtener_conexion()
     cursor = con.cursor()
 
     nombre = st.text_input("Nombre completo")
 
     if st.button("Registrar socia"):
+
         if nombre.strip() == "":
             st.warning("Debe ingresar un nombre.")
             return
+
         cursor.execute("INSERT INTO Socia(Nombre,Sexo) VALUES(%s,'F')", (nombre,))
         con.commit()
+
         st.success("Socia registrada.")
         st.rerun()
 
@@ -304,34 +309,3 @@ def pagina_registro_socias():
     if datos:
         df = pd.DataFrame(datos, columns=["ID","Nombre"])
         st.dataframe(df)
-# ============================================================
-# REGISTRO DE PAGO DE PRÉSTAMO (LLAMA A TU MÓDULO)
-# ============================================================
-def registrar_pago_prestamo():
-    pago_prestamo()
-
-
-# ============================================================
-# REGISTRO DE AHORRO (LLAMA A TU MÓDULO)
-# ============================================================
-def registrar_ahorro():
-    ahorro()
-
-
-# ============================================================
-# REGISTRO DE OTROS GASTOS (LLAMA A TU MÓDULO)
-# ============================================================
-def registrar_otros_gastos():
-    gastos_grupo()
-
-
-# ============================================================
-# REPORTE DE CAJA (LLAMA A TU MÓDULO)
-# ============================================================
-def reporte_caja():
-    reporte_caja()
-
-
-# ============================================================
-# <<< FIN DEL ARCHIVO >>>
-# ============================================================
