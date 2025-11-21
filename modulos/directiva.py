@@ -16,6 +16,9 @@ from modulos.caja import obtener_o_crear_reunion, registrar_movimiento, obtener_
 # NUEVO MÓDULO: OTROS GASTOS DEL GRUPO
 from modulos.gastos_grupo import gastos_grupo
 
+# 🔵 AGREGADO: CIERRE DE CICLO
+from modulos.cierre_ciclo import cierre_ciclo
+
 
 
 # ============================================================
@@ -72,7 +75,8 @@ def interfaz_directiva():
             "Autorizar préstamo",
             "Registrar pago de préstamo",
             "Registrar ahorro",
-            "Registrar otros gastos",   # ← AGREGADO
+            "Registrar otros gastos",
+            "Cierre de ciclo",      # ← AGREGADO
             "Reporte de caja"
         ]
     )
@@ -95,8 +99,11 @@ def interfaz_directiva():
     elif menu == "Registrar ahorro":
         ahorro()
 
-    elif menu == "Registrar otros gastos":   # ← AGREGADO
+    elif menu == "Registrar otros gastos":
         gastos_grupo()
+
+    elif menu == "Cierre de ciclo":
+        cierre_ciclo()
 
     elif menu == "Reporte de caja":
         reporte_caja()
@@ -212,7 +219,7 @@ def pagina_asistencia():
 
         con.commit()
 
-        # Registrar movimiento en caja_reunion
+        # Registrar movimiento en caja
         id_caja = obtener_o_crear_reunion(fecha)
         registrar_movimiento(id_caja, "Ingreso", f"Ingreso Extra – {tipo}", monto)
 
@@ -291,7 +298,6 @@ def pagina_multas():
 
         if c6.button("Actualizar", key=f"btn{mid}"):
 
-            # Si pasa de A pagar → Pagada → SE SUMA A CAJA
             if estado_actual == "A pagar" and nuevo_estado == "Pagada":
 
                 id_caja = obtener_o_crear_reunion(fecha_m)
