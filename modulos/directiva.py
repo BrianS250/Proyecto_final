@@ -10,8 +10,8 @@ from modulos.pago_prestamo import pago_prestamo
 from modulos.ahorro import ahorro
 from modulos.reporte_caja import reporte_caja
 
-# CAJA POR REUNIÓN
-from modulos.caja import obtener_o_crear_reunion, registrar_movimiento, obtener_saldo_por_fecha
+# CAJA (ACTUALIZADO A CAJA ÚNICA)
+from modulos.caja import obtener_o_crear_reunion, registrar_movimiento, obtener_saldo_actual
 
 # OTROS GASTOS
 from modulos.gastos_grupo import gastos_grupo
@@ -48,10 +48,10 @@ def interfaz_directiva():
 
     st.session_state["fecha_global"] = fecha_sel
 
-    # Saldo en caja
+    # SALDO REAL DE CAJA (YA NO POR FECHA)
     try:
-        saldo = obtener_saldo_por_fecha(fecha_sel)
-        st.info(f"💰 Saldo de caja para {fecha_sel}: **${saldo:.2f}**")
+        saldo = obtener_saldo_actual()
+        st.info(f"💰 Saldo real en caja: **${saldo:.2f}**")
     except:
         st.warning("⚠ Error al obtener el saldo de caja.")
 
@@ -172,7 +172,6 @@ def pagina_multas():
 
     estado_f = st.selectbox("Estado:", ["Todos", "A pagar", "Pagada"])
 
-    # CONSULTA
     query = """
         SELECT M.Id_Multa, S.Id_Socia, S.Nombre, T.`Tipo de multa` AS Tipo,
                M.Monto, M.Estado, M.Fecha_aplicacion
@@ -181,6 +180,7 @@ def pagina_multas():
         JOIN `Tipo de multa` T ON T.Id_Tipo_multa = M.Id_Tipo_multa
         WHERE 1=1
     """
+
     params = []
 
     if fecha_sql:
@@ -287,7 +287,6 @@ def pagina_asistencia():
         id_reunion = cursor.lastrowid
         st.success(f"Reunión creada (ID {id_reunion}).")
 
-    # SOCIAS
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
 
@@ -302,7 +301,6 @@ def pagina_asistencia():
         )
         registro[s["Id_Socia"]] = estado
 
-    # GUARDAR
     if st.button("💾 Guardar asistencia"):
         for id_socia, valor in registro.items():
             est = "Presente" if valor == "SI" else "Ausente"
@@ -329,7 +327,6 @@ def pagina_asistencia():
         con.commit()
         st.success("✔ Asistencia registrada.")
 
-    # MOSTRAR
     cursor.execute("""
         SELECT S.Id_Socia, S.Nombre, A.Estado_asistencia
         FROM Asistencia A
