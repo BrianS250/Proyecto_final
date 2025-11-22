@@ -33,15 +33,11 @@ def pago_prestamo():
         FROM Prestamo
         WHERE Id_Socia=%s AND Estado_del_prestamo='activo'
     """, (id_socia,))
+    prestamo = cursor.fetchone()
 
-    # ❗IMPORTANTE: fetchall() para evitar error "Unread result found"
-    prestamos = cursor.fetchall()
-
-    if len(prestamos) == 0:
+    if not prestamo:
         st.info("ℹ La socia no tiene un préstamo activo.")
         return
-
-    prestamo = prestamos[0]
 
     # Datos del préstamo
     id_prestamo = prestamo["Id_Préstamo"]
@@ -62,12 +58,12 @@ def pago_prestamo():
     info = {
         "ID Préstamo": id_prestamo,
         "Monto prestado": f"${monto:.2f}",
-        "Interés total aplicado": f"${interes_total:.2f}",
+        "Interés total": f"${interes_total:.2f}",
         "Total a pagar": f"${total_a_pagar:.2f}",
         "Cuotas quincenales": cuotas,
         "Cuota fija": f"${cuota_fija:.2f}",
         "Interés por cuota": f"${interes_por_cuota:.2f}",
-        "Saldo pendiente actual": f"${saldo_pendiente:.2f}"
+        "Saldo pendiente": f"${saldo_pendiente:.2f}"
     }
 
     st.table(pd.DataFrame(info.items(), columns=["Detalle", "Valor"]))
@@ -80,16 +76,14 @@ def pago_prestamo():
 
     if st.button("💵 Registrar pago"):
 
-        # 1️⃣ Calcular capital pagado
         capital_pagado = round(cuota_fija - interes_por_cuota, 2)
 
-        # 2️⃣ Nuevo saldo
         nuevo_saldo = round(saldo_pendiente - cuota_fija, 2)
         if nuevo_saldo < 0:
             nuevo_saldo = 0
 
         # ======================================================
-        # 3️⃣ REGISTRAR INGRESO EN CAJA
+        # REGISTRO EN CAJA
         # ======================================================
         id_caja = obtener_o_crear_reunion(fecha_pago)
 
@@ -101,15 +95,15 @@ def pago_prestamo():
         )
 
         # ======================================================
-        # 4️⃣ REGISTRAR PAGO EN BD
+        # GUARDAR PAGO EN LA TABLA CORRECTA
         # ======================================================
         cursor.execute("""
-            INSERT INTO `Pago del prestamo`(
-                `Fecha de pago`,
-                `Monto abonado`,
-                `Interés pagado`,
-                `Capital pagado`,
-                `Saldo restante`,
+            INSERT INTO Pago_del_prestamo(
+                `Fecha_de_pago`,
+                `Monto_abonado`,
+                `Interes_pagado`,
+                `Capital_pagado`,
+                `Saldo_restante`,
                 `Id_Prestamo`,
                 `Id_Caja`
             )
@@ -125,7 +119,7 @@ def pago_prestamo():
         ))
 
         # ======================================================
-        # 5️⃣ ACTUALIZAR PRÉSTAMO
+        # ACTUALIZAR PRÉSTAMO
         # ======================================================
         if nuevo_saldo == 0:
             cursor.execute("""
@@ -148,13 +142,13 @@ def pago_prestamo():
         st.rerun()
 
     # ======================================================
-    # HISTORIAL DE PAGOS — CORREGIDO
+    # HISTORIAL DE PAGOS — TABLA CORRECTA
     # ======================================================
     st.subheader("📜 Historial de pagos")
 
     cursor.execute("""
         SELECT *
-        FROM `Pago del prestamo`
+        FROM Pago_del_prestamo
         WHERE Id_Prestamo=%s
         ORDER BY Id_Pago ASC
     """, (id_prestamo,))
