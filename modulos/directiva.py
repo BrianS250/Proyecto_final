@@ -106,12 +106,9 @@ def interfaz_directiva():
 
 
 
-# ============================================================
-# 🔎 FILTRAR MULTAS — COMPLETO Y FUNCIONAL
-# ============================================================
 def pagina_filtrar_multas():
 
-    st.header("🔎 Filtrar multas registradas")
+    st.header("🔎 Filtrar multas")
 
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
@@ -119,29 +116,35 @@ def pagina_filtrar_multas():
     # -------------------------
     # FILTRO POR FECHA
     # -------------------------
-    fecha_filtro = st.date_input("📅 Filtrar por fecha (opcional)", value=None)
-    fecha_sql = fecha_filtro.strftime("%Y-%m-%d") if fecha_filtro else None
+    fecha_filtro = st.date_input("📅 Fecha (opcional)", value=None, key="filtro_fecha_multas")
+
+    usar_fecha = st.checkbox("Usar filtro de fecha", key="chk_fecha_multas")
+
+    fecha_sql = fecha_filtro.strftime("%Y-%m-%d") if usar_fecha else None
 
     # -------------------------
     # FILTRO POR SOCIA
     # -------------------------
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Nombre ASC")
-    socias = cursor.fetchall()
+    lista_socias = cursor.fetchall()
 
-    opciones_socias = {"Todas": None}
-    for s in socias:
-        opciones_socias[s["Nombre"]] = s["Id_Socia"]
+    nombres = ["Todas"] + [s["Nombre"] for s in lista_socias]
+    socia_sel = st.selectbox("👩 Socia:", nombres, key="filtro_socia_multas")
 
-    socia_sel = st.selectbox("👩 Filtrar por socia:", list(opciones_socias.keys()))
-    id_socia_filtro = opciones_socias[socia_sel]
+    id_socia_filtro = None
+    if socia_sel != "Todas":
+        for s in lista_socias:
+            if s["Nombre"] == socia_sel:
+                id_socia_filtro = s["Id_Socia"]
+                break
 
     # -------------------------
     # FILTRO POR ESTADO
     # -------------------------
-    estado_sel = st.selectbox("📌 Estado:", ["Todos", "A pagar", "Pagada"])
+    estado_sel = st.selectbox("📌 Estado:", ["Todos", "A pagar", "Pagada"], key="filtro_estado_multas")
 
     # -------------------------
-    # SQL DINÁMICO
+    # ARMAR QUERY
     # -------------------------
     query = """
         SELECT 
@@ -173,68 +176,19 @@ def pagina_filtrar_multas():
 
     query += " ORDER BY M.Id_Multa DESC"
 
+    # -------------------------
+    # EJECUTAR CONSULTA
+    # -------------------------
     cursor.execute(query, tuple(params))
-    resultados = cursor.fetchall()
+    multas = cursor.fetchall()
 
     st.write("### 📋 Resultados filtrados")
 
-    if not resultados:
-        st.info("No hay multas con los filtros seleccionados.")
+    if not multas:
+        st.info("No hay multas según los filtros.")
         return
 
-    # -------------------------
-    # TABLA COMPLETA
-    # -------------------------
-    df = pd.DataFrame(resultados)
-    st.dataframe(df, hide_index=True)
-
-    st.markdown("---")
-    st.write("### 🧾 Tabla resumen editable")
-
-    # -------------------------
-    # TABLA RESUMEN EDITABLE
-    # -------------------------
-    for multa in resultados:
-
-        st.write(f"### Multa #{multa['Id_Multa']}")
-
-        col1, col2, col3, col4, col5 = st.columns([3,3,2,2,3])
-
-        col1.write(f"👩 Socia: **{multa['Nombre']}**")
-        col2.write(f"📌 Tipo: **{multa['Tipo']}**")
-        col3.write(f"💵 Monto: **${multa['Monto']}**")
-        col4.write(f"📅 Fecha: **{multa['Fecha_aplicacion']}**")
-
-        nuevo_estado = col5.selectbox(
-            "Estado:",
-            ["A pagar", "Pagada"],
-            index=0 if multa['Estado'] == "A pagar" else 1,
-            key=f"estado_multa_{multa['Id_Multa']}"
-        )
-
-        if st.button(f"Actualizar multa {multa['Id_Multa']}", key=f"btn_{multa['Id_Multa']}"):
-
-            if multa["Estado"] == "A pagar" and nuevo_estado == "Pagada":
-
-                id_caja = obtener_o_crear_reunion(multa["Fecha_aplicacion"])
-                registrar_movimiento(
-                    id_caja,
-                    "Ingreso",
-                    f"Pago de multa – {multa['Nombre']}",
-                    float(multa["Monto"])
-                )
-
-            cursor.execute("""
-                UPDATE Multa SET Estado=%s WHERE Id_Multa=%s
-            """, (nuevo_estado, multa["Id_Multa"]))
-
-            con.commit()
-            st.success("✔ Multa actualizada.")
-            st.rerun()
-
-    cursor.close()
-    con.close()
-
+    # MOSTRAR TAB
 
 
 
