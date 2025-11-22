@@ -34,11 +34,14 @@ def pago_prestamo():
         WHERE Id_Socia=%s AND Estado_del_prestamo='activo'
     """, (id_socia,))
 
-    prestamo = cursor.fetchone()
+    # ❗IMPORTANTE: fetchall() para evitar error "Unread result found"
+    prestamos = cursor.fetchall()
 
-    if not prestamo:
+    if len(prestamos) == 0:
         st.info("ℹ La socia no tiene un préstamo activo.")
         return
+
+    prestamo = prestamos[0]
 
     # Datos del préstamo
     id_prestamo = prestamo["Id_Préstamo"]
@@ -64,7 +67,7 @@ def pago_prestamo():
         "Cuotas quincenales": cuotas,
         "Cuota fija": f"${cuota_fija:.2f}",
         "Interés por cuota": f"${interes_por_cuota:.2f}",
-        "Saldo pendiente": f"${saldo_pendiente:.2f}"
+        "Saldo pendiente actual": f"${saldo_pendiente:.2f}"
     }
 
     st.table(pd.DataFrame(info.items(), columns=["Detalle", "Valor"]))
@@ -98,7 +101,7 @@ def pago_prestamo():
         )
 
         # ======================================================
-        # 4️⃣ GUARDAR EN TABLA Pago del prestamo
+        # 4️⃣ REGISTRAR PAGO EN BD
         # ======================================================
         cursor.execute("""
             INSERT INTO `Pago del prestamo`(
@@ -145,7 +148,7 @@ def pago_prestamo():
         st.rerun()
 
     # ======================================================
-    # HISTORIAL DE PAGOS (CORREGIDO)
+    # HISTORIAL DE PAGOS — CORREGIDO
     # ======================================================
     st.subheader("📜 Historial de pagos")
 
