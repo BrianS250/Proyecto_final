@@ -7,7 +7,7 @@ from modulos.caja import obtener_o_crear_reunion, registrar_movimiento
 
 
 # ============================================================
-#     AUTORIZAR PRÉSTAMO — SISTEMA CVX (VERSIÓN FINAL)
+#     AUTORIZAR PRÉSTAMO — SISTEMA CVX
 # ============================================================
 def autorizar_prestamo():
 
@@ -34,7 +34,10 @@ def autorizar_prestamo():
     # ======================================================
     with st.form("form_prestamo"):
 
-        fecha_prestamo = st.date_input("📅 Fecha del préstamo", date.today()).strftime("%Y-%m-%d")
+        fecha_prestamo = st.date_input(
+            "📅 Fecha del préstamo",
+            date.today()
+        ).strftime("%Y-%m-%d")
 
         socia_sel = st.selectbox("👩 Socia que recibe el préstamo", list(lista_socias.keys()))
         id_socia = lista_socias[socia_sel]
@@ -48,7 +51,7 @@ def autorizar_prestamo():
         enviar = st.form_submit_button("✅ Autorizar préstamo")
 
     # ======================================================
-    # 3️⃣ PROCESAR FORMULARIO
+    # 3️⃣ PROCESAR
     # ======================================================
     if enviar:
 
@@ -67,7 +70,7 @@ def autorizar_prestamo():
             return
 
         # -----------------------------------------------
-        # VALIDACIÓN 2 — AHORRO TOTAL
+        # VALIDACIÓN 2 — AHORRO DISPONIBLE
         # -----------------------------------------------
         cursor.execute("""
             SELECT `Saldo acumulado`
@@ -76,33 +79,27 @@ def autorizar_prestamo():
             ORDER BY Id_Ahorro DESC
             LIMIT 1
         """, (id_socia,))
-
         row = cursor.fetchone()
         ahorro_total = Decimal(row["Saldo acumulado"]) if row else Decimal("0.00")
 
         if ahorro_total < Decimal(monto):
-            st.error(
-                f"❌ La socia solo tiene ${ahorro_total:.2f} de ahorro. "
-                f"No puede solicitar un préstamo de ${monto:.2f}."
-            )
+            st.error(f"❌ La socia solo tiene ${ahorro_total:.2f}. No puede solicitar ${monto:.2f}.")
             return
 
         # -----------------------------------------------
-        # VALIDACIÓN 3 — SALDO DE CAJA REUNIÓN
+        # VALIDACIÓN 3 — SALDO EN CAJA
         # -----------------------------------------------
         id_caja = obtener_o_crear_reunion(fecha_prestamo)
 
-        cursor.execute("""
-            SELECT saldo_final FROM caja_reunion WHERE id_caja=%s
-        """, (id_caja,))
+        cursor.execute("SELECT saldo_final FROM caja_reunion WHERE id_caja=%s", (id_caja,))
         saldo_caja = Decimal(cursor.fetchone()["saldo_final"])
 
         if Decimal(monto) > saldo_caja:
-            st.error(f"❌ Saldo insuficiente en caja. Saldo actual: ${saldo_caja:.2f}")
+            st.error(f"❌ Saldo insuficiente en caja. Disponible: ${saldo_caja:.2f}")
             return
 
         # -----------------------------------------------
-        # CALCULO DEL INTERÉS TOTAL
+        # CALCULO DEL INTERÉS
         # -----------------------------------------------
         interes_total = Decimal(monto) * (Decimal(tasa) / 100)
         total_pagar = Decimal(monto) + interes_total
@@ -140,14 +137,14 @@ def autorizar_prestamo():
         id_prestamo_generado = cursor.lastrowid
 
         # -----------------------------------------------
-        # 5️⃣ DESCONTAR AHORRO DE LA SOCIA
+        # 5️⃣ DESCONTAR AHORRO (CORREGIDO)
         # -----------------------------------------------
         nuevo_ahorro = ahorro_total - Decimal(monto)
 
         cursor.execute("""
             INSERT INTO Ahorro
-            (Fecha_del_aporte, Monto, `Tipo de aporte`, `Comprobante digital`, `Saldo acumulado`,
-             Id_Socia, Id_Reunion, Id_Grupo, Id_Caja)
+            (`Fecha del aporte`, `Monto del aporte`, `Tipo de aporte`, `Comprobante digital`,
+             `Saldo acumulado`, Id_Socia, Id_Reunión, Id_Grupo, Id_Caja)
             VALUES (%s, %s, 'Descuento préstamo', '---', %s, %s, NULL, 1, NULL)
         """, (
             fecha_prestamo,
@@ -189,20 +186,19 @@ def autorizar_prestamo():
         con.commit()
 
         # -----------------------------------------------
-        # 8️⃣ RESUMEN DEL PRÉSTAMO
+        # 8️⃣ RESUMEN
         # -----------------------------------------------
-        st.success("✔ Préstamo autorizado correctamente y descontado de caja y ahorro.")
+        st.success("✔ Préstamo autorizado correctamente.")
 
         st.subheader("📘 Resumen del préstamo")
-
         st.write(f"**Socia:** {socia_sel}")
         st.write(f"**Monto prestado:** ${monto}")
         st.write(f"**Interés total:** ${interes_total:.2f}")
         st.write(f"**Total a pagar:** ${total_pagar:.2f}")
         st.write(f"**Cuotas:** {cuotas}")
         st.write(f"**Valor por cuota:** ${round(valor_cuota, 2)}")
-        st.write("**📅 Calendario de pagos:**")
 
+        st.write("**📅 Calendario de pagos:**")
         for n in range(1, cuotas + 1):
             fecha_cuota = (fecha_base + timedelta(days=15 * n)).strftime("%Y-%m-%d")
             st.write(f"➡ Cuota #{n}: {fecha_cuota} — ${round(valor_cuota, 2)}")
