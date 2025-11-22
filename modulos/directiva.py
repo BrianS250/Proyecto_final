@@ -82,7 +82,7 @@ def interfaz_directiva():
     if menu == "Registro de asistencia":
         pagina_asistencia()
     elif menu == "Aplicar multas":
-        pagina_multas()  # YA INCLUYE FILTROS
+        pagina_multas()
     elif menu == "Registrar nuevas socias":
         pagina_registro_socias()
     elif menu == "Autorizar préstamo":
@@ -117,14 +117,15 @@ def pagina_multas():
     # ============================================================
     st.subheader("➕ Registrar nueva multa")
 
-    cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Nombre ASC")
+    # 🔥 IMPORTANTE: ordenar por Id_Socia, no por nombre
+    cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
-    opciones_socias = {s["Nombre"]: s["Id_Socia"] for s in socias}
+    opciones_socias = {f"{s['Id_Socia']} - {s['Nombre']}": s["Id_Socia"] for s in socias}
 
     socia_sel = st.selectbox("Socia:", opciones_socias.keys())
     id_socia = opciones_socias[socia_sel]
 
-    cursor.execute("SELECT Id_Tipo_multa, `Tipo de multa` FROM `Tipo de multa`")
+    cursor.execute("SELECT Id_Tipo_multa, `Tipo de multa` FROM `Tipo de multa` ORDER BY Id_Tipo_multa ASC")
     tipos = cursor.fetchall()
     opciones_tipos = {t["Tipo de multa"]: t["Id_Tipo_multa"] for t in tipos}
 
@@ -154,19 +155,16 @@ def pagina_multas():
     # ============================================================
     st.subheader("🔎 Filtrar multas")
 
-    # FECHA
     fecha_filtro = st.date_input("Filtrar por fecha (opcional)", value=None)
     fecha_sql = fecha_filtro.strftime("%Y-%m-%d") if fecha_filtro else None
 
-    # SOCIA
     opciones_socias_f = {"Todas": None}
     for s in socias:
-        opciones_socias_f[s["Nombre"]] = s["Id_Socia"]
+        opciones_socias_f[f"{s['Id_Socia']} - {s['Nombre']}"] = s["Id_Socia"]
 
     socia_f = st.selectbox("Filtrar por socia:", opciones_socias_f.keys())
     id_socia_f = opciones_socias_f[socia_f]
 
-    # TIPO
     opciones_tipo_f = {"Todos": None}
     for t in tipos:
         opciones_tipo_f[t["Tipo de multa"]] = t["Id_Tipo_multa"]
@@ -174,14 +172,13 @@ def pagina_multas():
     tipo_f = st.selectbox("Filtrar por tipo:", opciones_tipo_f.keys())
     tipo_id_f = opciones_tipo_f[tipo_f]
 
-    # ESTADO
     estado_f = st.selectbox("Filtrar por estado:", ["Todos", "A pagar", "Pagada"])
 
     # ============================================================
-    # 3️⃣ CONSULTA FILTRADA
+    # 3️⃣ CONSULTA
     # ============================================================
     query = """
-        SELECT M.Id_Multa, S.Nombre, T.`Tipo de multa` AS Tipo,
+        SELECT M.Id_Multa, S.Id_Socia, S.Nombre, T.`Tipo de multa` AS Tipo,
                M.Monto, M.Estado, M.Fecha_aplicacion
         FROM Multa M
         JOIN Socia S ON S.Id_Socia = M.Id_Socia
@@ -221,12 +218,12 @@ def pagina_multas():
     st.markdown("---")
 
     # ============================================================
-    # 4️⃣ MULTAS PENDIENTES (A pagar)
+    # 4️⃣ MULTAS PENDIENTES
     # ============================================================
     st.subheader("📌 Multas pendientes (A pagar)")
 
     cursor.execute("""
-        SELECT M.Id_Multa, S.Nombre, T.`Tipo de multa` AS Tipo,
+        SELECT M.Id_Multa, S.Id_Socia, S.Nombre, T.`Tipo de multa` AS Tipo,
                M.Monto, M.Fecha_aplicacion
         FROM Multa M
         JOIN Socia S ON S.Id_Socia=M.Id_Socia
@@ -240,10 +237,10 @@ def pagina_multas():
         st.info("No hay multas pendientes.")
     else:
         for m in pendientes:
-            c1, c2, c3, c4, c5 = st.columns([1,3,3,2,3])
+            c1, c2, c3, c4, c5 = st.columns([1,2,2,2,3])
 
-            c1.write(m["Id_Multa"])
-            c2.write(m["Nombre"])
+            c1.write(f"#{m['Id_Multa']}")
+            c2.write(f"{m['Id_Socia']} - {m['Nombre']}")
             c3.write(m["Tipo"])
             c4.write(f"${m['Monto']}")
 
@@ -338,7 +335,7 @@ def pagina_asistencia():
         st.success("Asistencia registrada.")
 
     cursor.execute("""
-        SELECT S.Nombre, A.Estado_asistencia
+        SELECT S.Id_Socia, S.Nombre, A.Estado_asistencia
         FROM Asistencia A
         JOIN Socia S ON S.Id_Socia=A.Id_Socia
         WHERE A.Id_Reunion=%s
@@ -346,11 +343,11 @@ def pagina_asistencia():
     datos = cursor.fetchall()
 
     if datos:
-        df = pd.DataFrame(datos, columns=["Socia", "Asistencia"])
-        st.dataframe(df)
+        df = pd.DataFrame(datos, columns=["ID", "Socia", "Asistencia"])
+        st.dataframe(df, hide_index=True)
 
         total_socias = len(datos)
-        presentes = sum(1 for _, est in datos if est == "Presente")
+        presentes = sum(1 for _, _, est in datos if est == "Presente")
         ausentes = total_socias - presentes
 
         st.markdown("### 📊 Resumen de asistencia")
@@ -362,12 +359,10 @@ def pagina_asistencia():
 
     st.markdown("---")
 
-    # INGRESOS EXTRAORDINARIOS
-    st.header("💰 Ingresos extraordinarios")
-
+    # INGRESOS EXTRA
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
-    opciones = {nombre: id_s for id_s, nombre in socias}
+    opciones = {f"{id_s} - {nom}": id_s for id_s, nom in socias}
 
     socia_sel = st.selectbox("Socia:", opciones.keys())
     id_socia = opciones[socia_sel]
