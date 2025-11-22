@@ -1,11 +1,10 @@
 import streamlit as st
 from datetime import date
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 from modulos.conexion import obtener_conexion
-from modulos.caja import obtener_o_crear_reunion, registrar_movimiento, obtener_saldo_por_fecha
+from modulos.caja import obtener_o_crear_reunion, registrar_movimiento
 
 
 def gastos_grupo():
@@ -27,19 +26,17 @@ def gastos_grupo():
     responsable = st.text_input("Nombre de la persona responsable del gasto")
 
     # --------------------------------------------------------
-    # DUI (UN SOLO CAMPO - máximo 9 dígitos)
+    # DUI (9 dígitos)
     # --------------------------------------------------------
     dui_raw = st.text_input("DUI (9 dígitos)", value="", max_chars=9)
 
-    # Limitar a máximo 9 dígitos
     if len(dui_raw) > 9:
         dui_raw = dui_raw[:9]
 
-    # Validación
     dui_valido = dui_raw.isdigit() and len(dui_raw) == 9
 
     # --------------------------------------------------------
-    # CONCEPTO (opcional)
+    # CONCEPTO
     # --------------------------------------------------------
     descripcion = st.text_input("Concepto del gasto (opcional)")
 
@@ -49,9 +46,18 @@ def gastos_grupo():
     monto = st.number_input("Monto del gasto ($)", min_value=0.01, step=0.01)
 
     # --------------------------------------------------------
-    # SALDO DISPONIBLE
+    # SALDO DISPONIBLE — SE OBTIENE DIRECTO DESDE caja_reunion
     # --------------------------------------------------------
-    saldo = obtener_saldo_por_fecha(fecha)
+    cursor.execute("""
+        SELECT saldo_final
+        FROM caja_reunion
+        WHERE fecha <= %s
+        ORDER BY fecha DESC
+        LIMIT 1
+    """, (fecha,))
+    row = cursor.fetchone()
+    saldo = float(row["saldo_final"]) if row else 0.00
+
     st.info(f"💰 Saldo disponible en caja para {fecha}: **${saldo:.2f}**")
 
     # --------------------------------------------------------
@@ -59,29 +65,32 @@ def gastos_grupo():
     # --------------------------------------------------------
     if st.button("💳 Registrar gasto"):
 
-        # Validación DUI
         if not dui_valido:
             st.error("❌ El DUI debe tener exactamente 9 dígitos numéricos.")
             return
 
-        # Validación saldo
-        if monto > float(saldo):
+        if monto > saldo:
             st.error("❌ No se puede registrar el gasto. El saldo es insuficiente.")
             return
 
-        # Obtener o crear la reunión (Opción A)
+        # Obtener o crear la reunión
         id_caja = obtener_o_crear_reunion(fecha)
 
         try:
-            # Registrar gasto en tabla
+            # Registrar gasto
             cursor.execute("""
                 INSERT INTO Gastos_grupo (Fecha_gasto, Descripcion, Monto, Responsable, DUI, Id_Caja)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (fecha, descripcion, monto, responsable, dui_raw, id_caja))
             con.commit()
 
-            # Registrar movimiento en caja
-            registrar_movimiento(id_caja, "Egreso", f"Gasto – {descripcion}", monto)
+            # Registrar egreso en caja
+            registrar_movimiento(
+                id_caja=id_caja,
+                tipo="Egreso",
+                categoria=f"Gasto – {descripcion}",
+                monto=monto
+            )
 
             st.success("✔ Gasto registrado correctamente.")
 
@@ -125,4 +134,3 @@ def gastos_grupo():
 
         except Exception as e:
             st.error(f"❌ Error registrando el gasto en MySQL.\n\n{e}")
-
