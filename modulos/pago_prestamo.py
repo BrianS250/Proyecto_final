@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import date
 from decimal import Decimal
+
 from modulos.conexion import obtener_conexion
 from modulos.caja import registrar_movimiento, obtener_o_crear_reunion
 
@@ -78,6 +79,9 @@ def pago_prestamo():
 
     fecha_pago = st.date_input("📅 Fecha del pago:", date.today()).strftime("%Y-%m-%d")
 
+    # -----------------------------------------------
+    # REGISTRAR PAGO
+    # -----------------------------------------------
     if st.button("💾 Registrar pago"):
 
         # obtener datos de la cuota
@@ -85,19 +89,30 @@ def pago_prestamo():
         cuota = cur.fetchone()
         monto_cuota = Decimal(cuota["Monto_cuota"])
 
-        # actualizar caja
+        # ------------------------------------------------------
+        # 1️⃣ Registrar movimiento en CAJA ÚNICA + reunión
+        # ------------------------------------------------------
         id_caja = obtener_o_crear_reunion(fecha_pago)
-        registrar_movimiento(id_caja, "Ingreso",
-                             f"Pago cuota préstamo {id_prestamo}", monto_cuota)
 
-        # marcar cuota pagada
+        registrar_movimiento(
+            id_caja=id_caja,
+            tipo="Ingreso",
+            categoria=f"Pago cuota préstamo {id_prestamo}",
+            monto=monto_cuota
+        )
+
+        # ------------------------------------------------------
+        # 2️⃣ Marcar cuota como pagada
+        # ------------------------------------------------------
         cur.execute("""
             UPDATE Cuotas_prestamo
             SET Estado='pagada', Fecha_pago=%s, Id_Caja=%s
             WHERE Id_Cuota=%s
         """, (fecha_pago, id_caja, id_cuota))
 
-        # actualizar saldo del préstamo
+        # ------------------------------------------------------
+        # 3️⃣ Actualizar saldo del préstamo
+        # ------------------------------------------------------
         nuevo_saldo = saldo_pendiente - monto_cuota
         if nuevo_saldo < 0:
             nuevo_saldo = Decimal("0.00")
@@ -105,11 +120,12 @@ def pago_prestamo():
         cur.execute("""
             UPDATE Prestamo
             SET `Saldo pendiente`=%s,
-                Estado_del_prestamo = 
+                Estado_del_prestamo =
                     CASE WHEN %s=0 THEN 'pagado' ELSE 'activo' END
             WHERE Id_Préstamo=%s
         """, (nuevo_saldo, nuevo_saldo, id_prestamo))
 
         con.commit()
+
         st.success("✔ Pago registrado correctamente.")
         st.rerun()
