@@ -1,23 +1,25 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
+from decimal import Decimal
+
 from modulos.conexion import obtener_conexion
-
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
+from modulos.caja import obtener_o_crear_reunion, registrar_movimiento
 
 
+# ============================================================
+#     AUTORIZAR PRÉSTAMO — SISTEMA CVX (VERSIÓN CORRECTA)
+# ============================================================
 def autorizar_prestamo():
 
     st.title("💳 Autorizar préstamo")
     st.write("Complete la información para autorizar un nuevo préstamo.")
 
     con = obtener_conexion()
-    cursor = con.cursor()
+    cursor = con.cursor(dictionary=True)
 
     # ======================================================
-    # OBTENER SOCIAS
+    # 1️⃣ OBTENER SOCIAS
     # ======================================================
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
@@ -26,88 +28,121 @@ def autorizar_prestamo():
         st.warning("⚠ No hay socias registradas.")
         return
 
-    lista_socias = {f"{id} - {nombre}": id for (id, nombre) in socias}
+    lista_socias = {f"{s['Id_Socia']} - {s['Nombre']}": s["Id_Socia"] for s in socias}
 
     # ======================================================
-    # FORMULARIO
+    # 2️⃣ FORMULARIO
     # ======================================================
     with st.form("form_prestamo"):
 
-        fecha_prestamo = st.date_input("📅 Fecha del préstamo", date.today())
+        fecha_prestamo = st.date_input("📅 Fecha del préstamo", date.today()).strftime("%Y-%m-%d")
 
-        socia_seleccionada = st.selectbox("👩 Socia que recibe el préstamo", list(lista_socias.keys()))
-        id_socia = lista_socias[socia_seleccionada]
+        socia_sel = st.selectbox("👩 Socia que recibe el préstamo", list(lista_socias.keys()))
+        id_socia = lista_socias[socia_sel]
 
-        monto = st.number_input("💵 Monto prestado ($):", min_value=1, step=1)
-        tasa_interes = st.number_input("📈 Tasa de interés (%):", min_value=1, step=1)
+        monto = st.number_input("💵 Monto prestado ($):", min_value=1.0, step=1.0)
+        tasa = st.number_input("📈 Tasa de interés (%)", min_value=1.0, step=1.0)
         plazo = st.number_input("🗓 Plazo (meses):", min_value=1)
         cuotas = st.number_input("📑 Número de cuotas:", min_value=1)
-
         firma = st.text_input("✍️ Firma del directivo que autoriza")
 
         enviar = st.form_submit_button("✅ Autorizar préstamo")
 
     # ======================================================
-    # PROCESAR FORMULARIO
+    # 3️⃣ PROCESAR FORMULARIO
     # ======================================================
     if enviar:
 
-        cursor.execute("SELECT Id_Caja, Saldo_actual FROM Caja ORDER BY Id_Caja DESC LIMIT 1")
-        caja = cursor.fetchone()
+        # -----------------------------------------------
+        # VALIDACIÓN 1 — PRESTAMO ACTIVO
+        # -----------------------------------------------
+        cursor.execute("""
+            SELECT COUNT(*) AS activos
+            FROM Prestamo
+            WHERE Id_Socia=%s AND Estado_del_prestamo='activo'
+        """, (id_socia,))
+        activos = cursor.fetchone()["activos"]
 
-        if not caja:
-            st.error("❌ No existe caja activa.")
+        if activos > 0:
+            st.error("❌ La socia ya tiene un préstamo activo.")
             return
 
-        id_caja, saldo_actual = caja
+        # -----------------------------------------------
+        # VALIDACIÓN 2 — AHORRO TOTAL
+        # -----------------------------------------------
+        cursor.execute("""
+            SELECT COALESCE(SUM(Monto), 0) AS ahorro
+            FROM Ahorro
+            WHERE Id_Socia=%s
+        """, (id_socia,))
+        ahorro_total = Decimal(cursor.fetchone()["ahorro"])
 
-        if monto > saldo_actual:
-            st.error(f"❌ Fondos insuficientes. Saldo disponible: ${saldo_actual}")
+        if ahorro_total < Decimal(monto):
+            st.error(
+                f"❌ La socia solo tiene ${ahorro_total:.2f} de ahorro. "
+                f"No puede solicitar un préstamo de ${monto:.2f}."
+            )
             return
 
-        saldo_pendiente = monto
+        # -----------------------------------------------
+        # VALIDACIÓN 3 — SALDO DE CAJA REUNIÓN
+        # -----------------------------------------------
+        id_caja = obtener_o_crear_reunion(fecha_prestamo)
 
-        try:
-            # --------------------------------------------------
-            # 1. REGISTRAR PRÉSTAMO (CORREGIDO)
-            # --------------------------------------------------
-            cursor.execute("""
-                INSERT INTO Prestamo(
-                    `Fecha del préstamo`, `Monto prestado`, `Tasa de interes`,
-                    `Plazo`, `Cuotas`, `Saldo pendiente`, Estado_del_prestamo,
-                    Id_Grupo, Id_Socia, Id_Caja
-                )
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            """,
-            (
-                fecha_prestamo,
-                monto,
-                tasa_interes,
-                plazo,
-                cuotas,
-                saldo_pendiente,
-                "activo",
-                1,
-                id_socia,
-                id_caja
-            ))
+        cursor.execute("""
+            SELECT saldo_final FROM caja_reunion WHERE id_caja=%s
+        """, (id_caja,))
+        saldo_caja = Decimal(cursor.fetchone()["saldo_final"])
 
-            # --------------------------------------------------
-            # 2. REGISTRAR EGRESO EN CAJA
-            # --------------------------------------------------
-            cursor.execute("""
-                INSERT INTO Caja(Concepto, Monto, Saldo_actual, Id_Grupo, Id_Tipo_movimiento, Fecha)
-                VALUES (%s, %s, %s, 1, 3, CURRENT_DATE())
-            """,
-            (
-                f"Préstamo otorgado a: {socia_seleccionada}",
-                -monto,
-                saldo_actual - monto
-            ))
+        if Decimal(monto) > saldo_caja:
+            st.error(f"❌ Saldo insuficiente en caja. Saldo actual: ${saldo_caja:.2f}")
+            return
 
-            con.commit()
+        # -----------------------------------------------
+        # CALCULO DEL INTERÉS TOTAL
+        # -----------------------------------------------
+        interes_total = (Decimal(monto) * (Decimal(tasa)/100))
 
-            st.success("✔ Préstamo autorizado correctamente.")
+        # -----------------------------------------------
+        # REGISTRAR PRÉSTAMO
+        # -----------------------------------------------
+        cursor.execute("""
+            INSERT INTO Prestamo(
+                `Fecha del préstamo`,
+                `Monto prestado`,
+                `Interes_total`,
+                `Tasa de interes`,
+                `Plazo`,
+                `Cuotas`,
+                `Saldo pendiente`,
+                Estado_del_prestamo,
+                Id_Grupo,
+                Id_Socia,
+                Id_Caja
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,'activo',1,%s,%s)
+        """, (
+            fecha_prestamo,
+            monto,
+            interes_total,
+            tasa,
+            plazo,
+            cuotas,
+            monto + interes_total,
+            id_socia,
+            id_caja
+        ))
 
-        except Exception as e:
-            st.error(f"❌ Error al registrar el préstamo: {e}")
+        # -----------------------------------------------
+        # REGISTRA EGRESO EN CAJA (REAL Y CORRECTO)
+        # -----------------------------------------------
+        registrar_movimiento(
+            id_caja=id_caja,
+            tipo="Egreso",
+            categoria=f"Préstamo otorgado – {socia_sel}",
+            monto=monto
+        )
+
+        con.commit()
+        st.success("✔ Préstamo autorizado correctamente y descontado de caja.")
+
