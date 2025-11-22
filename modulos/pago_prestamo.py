@@ -33,6 +33,7 @@ def pago_prestamo():
         FROM Prestamo
         WHERE Id_Socia=%s AND Estado_del_prestamo='activo'
     """, (id_socia,))
+
     prestamo = cursor.fetchone()
 
     if not prestamo:
@@ -58,7 +59,7 @@ def pago_prestamo():
     info = {
         "ID Préstamo": id_prestamo,
         "Monto prestado": f"${monto:.2f}",
-        "Interés total": f"${interes_total:.2f}",
+        "Interés total aplicado": f"${interes_total:.2f}",
         "Total a pagar": f"${total_a_pagar:.2f}",
         "Cuotas quincenales": cuotas,
         "Cuota fija": f"${cuota_fija:.2f}",
@@ -144,7 +145,7 @@ def pago_prestamo():
         st.rerun()
 
     # ======================================================
-    # HISTORIAL DE PAGOS
+    # HISTORIAL DE PAGOS (CORREGIDO)
     # ======================================================
     st.subheader("📜 Historial de pagos")
 
