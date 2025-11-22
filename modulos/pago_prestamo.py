@@ -5,9 +5,6 @@ from modulos.conexion import obtener_conexion
 from modulos.caja import registrar_movimiento, obtener_o_crear_reunion
 
 
-# =======================================================================
-#            REGISTRO PROFESIONAL DE PAGOS DE PRÉSTAMO (CON CUOTAS)
-# =======================================================================
 def pago_prestamo():
 
     st.header("💵 Registro de pagos de préstamos")
@@ -15,9 +12,9 @@ def pago_prestamo():
     con = obtener_conexion()
     cur = con.cursor(dictionary=True)
 
-    # -------------------------------------------------------------------
-    # 1️⃣ SOCIAS
-    # -------------------------------------------------------------------
+    # -----------------------------------------------
+    # SOCIAS
+    # -----------------------------------------------
     cur.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cur.fetchall()
     dict_socias = {f"{s['Id_Socia']} - {s['Nombre']}": s["Id_Socia"] for s in socias}
@@ -25,9 +22,9 @@ def pago_prestamo():
     socia_sel = st.selectbox("👩 Seleccione la socia:", dict_socias.keys())
     id_socia = dict_socias[socia_sel]
 
-    # -------------------------------------------------------------------
-    # 2️⃣ PRÉSTAMO ACTIVO
-    # -------------------------------------------------------------------
+    # -----------------------------------------------
+    # PRÉSTAMO ACTIVO
+    # -----------------------------------------------
     cur.execute("""
         SELECT *
         FROM Prestamo
@@ -46,15 +43,15 @@ def pago_prestamo():
     st.subheader("📄 Información del préstamo")
     st.write(f"**ID Préstamo:** {id_prestamo}")
     st.write(f"**Monto prestado:** ${prestamo['Monto prestado']}")
-    st.write(f"**Saldo pendiente:** ${saldo_pendiente}")
     st.write(f"**Interés total:** ${prestamo['Interes_total']}")
-    st.write(f"**Cuotas asignadas:** {prestamo['Cuotas']}")
+    st.write(f"**Saldo pendiente:** ${saldo_pendiente}")
+    st.write(f"**Cuotas:** {prestamo['Cuotas']}")
 
     st.divider()
 
-    # -------------------------------------------------------------------
-    # 3️⃣ CUOTAS PENDIENTES
-    # -------------------------------------------------------------------
+    # -----------------------------------------------
+    # CUOTAS PENDIENTES
+    # -----------------------------------------------
     cur.execute("""
         SELECT *
         FROM Cuotas_prestamo
@@ -81,33 +78,26 @@ def pago_prestamo():
 
     fecha_pago = st.date_input("📅 Fecha del pago:", date.today()).strftime("%Y-%m-%d")
 
-    # -------------------------------------------------------------------
-    # 4️⃣ PROCESAR PAGO
-    # -------------------------------------------------------------------
     if st.button("💾 Registrar pago"):
 
-        # Obtener datos reales de la cuota seleccionada
+        # obtener datos de la cuota
         cur.execute("SELECT * FROM Cuotas_prestamo WHERE Id_Cuota=%s", (id_cuota,))
         cuota = cur.fetchone()
         monto_cuota = Decimal(cuota["Monto_cuota"])
 
-        # Registrar ingreso en caja
+        # actualizar caja
         id_caja = obtener_o_crear_reunion(fecha_pago)
-        registrar_movimiento(
-            id_caja=id_caja,
-            tipo="Ingreso",
-            categoria=f"Pago cuota préstamo {id_prestamo}",
-            monto=monto_cuota
-        )
+        registrar_movimiento(id_caja, "Ingreso",
+                             f"Pago cuota préstamo {id_prestamo}", monto_cuota)
 
-        # Marcar cuota como pagada
+        # marcar cuota pagada
         cur.execute("""
             UPDATE Cuotas_prestamo
             SET Estado='pagada', Fecha_pago=%s, Id_Caja=%s
             WHERE Id_Cuota=%s
         """, (fecha_pago, id_caja, id_cuota))
 
-        # Actualizar saldo del préstamo
+        # actualizar saldo del préstamo
         nuevo_saldo = saldo_pendiente - monto_cuota
         if nuevo_saldo < 0:
             nuevo_saldo = Decimal("0.00")
@@ -115,11 +105,11 @@ def pago_prestamo():
         cur.execute("""
             UPDATE Prestamo
             SET `Saldo pendiente`=%s,
-                Estado_del_prestamo = CASE WHEN %s = 0 THEN 'pagado' ELSE 'activo' END
+                Estado_del_prestamo = 
+                    CASE WHEN %s=0 THEN 'pagado' ELSE 'activo' END
             WHERE Id_Préstamo=%s
         """, (nuevo_saldo, nuevo_saldo, id_prestamo))
 
         con.commit()
-
         st.success("✔ Pago registrado correctamente.")
         st.rerun()
