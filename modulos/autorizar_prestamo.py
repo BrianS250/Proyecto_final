@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 from datetime import date
 from decimal import Decimal
 
@@ -8,7 +7,7 @@ from modulos.caja import obtener_o_crear_reunion, registrar_movimiento
 
 
 # ============================================================
-#         AUTORIZAR PRÉSTAMO — SISTEMA CVX (FINAL)
+#     AUTORIZAR PRÉSTAMO — SISTEMA CVX (VERSIÓN FINAL)
 # ============================================================
 def autorizar_prestamo():
 
@@ -19,7 +18,7 @@ def autorizar_prestamo():
     cursor = con.cursor(dictionary=True)
 
     # ======================================================
-    # 1️⃣ LISTA DE SOCIAS
+    # 1️⃣ OBTENER SOCIAS
     # ======================================================
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
@@ -44,7 +43,6 @@ def autorizar_prestamo():
         tasa = st.number_input("📈 Tasa de interés (%)", min_value=1.0, step=1.0)
         plazo = st.number_input("🗓 Plazo (meses):", min_value=1)
         cuotas = st.number_input("📑 Número de cuotas:", min_value=1)
-
         firma = st.text_input("✍️ Firma del directivo que autoriza")
 
         enviar = st.form_submit_button("✅ Autorizar préstamo")
@@ -54,9 +52,9 @@ def autorizar_prestamo():
     # ======================================================
     if enviar:
 
-        # --------------------------------------------------
+        # -----------------------------------------------
         # VALIDACIÓN 1 — PRÉSTAMO ACTIVO
-        # --------------------------------------------------
+        # -----------------------------------------------
         cursor.execute("""
             SELECT COUNT(*) AS activos
             FROM Prestamo
@@ -68,51 +66,49 @@ def autorizar_prestamo():
             st.error("❌ La socia ya tiene un préstamo activo.")
             return
 
-        # --------------------------------------------------
-        # VALIDACIÓN 2 — SALDO ACUMULADO REAL
-        # --------------------------------------------------
+        # -----------------------------------------------
+        # VALIDACIÓN 2 — AHORRO TOTAL (CORREGIDO)
+        # -----------------------------------------------
         cursor.execute("""
-            SELECT Saldo_acumulado
+            SELECT `Saldo acumulado`
             FROM Ahorro
             WHERE Id_Socia=%s
             ORDER BY Id_Ahorro DESC
             LIMIT 1
         """, (id_socia,))
-        row_ahorro = cursor.fetchone()
 
-        ahorro_total = Decimal(row_ahorro["Saldo_acumulado"]) if row_ahorro else Decimal("0")
+        row = cursor.fetchone()
+        ahorro_total = Decimal(row["Saldo acumulado"]) if row else Decimal("0.00")
 
         if ahorro_total < Decimal(monto):
             st.error(
-                f"❌ La socia tiene solo ${ahorro_total:.2f} ahorrado.\n"
-                f"No puede solicitar un préstamo de ${Decimal(monto):.2f}."
+                f"❌ La socia solo tiene ${ahorro_total:.2f} de ahorro. "
+                f"No puede solicitar un préstamo de ${monto:.2f}."
             )
             return
 
-        # --------------------------------------------------
-        # VALIDACIÓN 3 — SALDO EN CAJA REUNIÓN
-        # --------------------------------------------------
+        # -----------------------------------------------
+        # VALIDACIÓN 3 — SALDO DE CAJA REUNIÓN
+        # -----------------------------------------------
         id_caja = obtener_o_crear_reunion(fecha_prestamo)
 
-        cursor.execute("SELECT saldo_final FROM caja_reunion WHERE id_caja=%s", (id_caja,))
+        cursor.execute("""
+            SELECT saldo_final FROM caja_reunion WHERE id_caja=%s
+        """, (id_caja,))
         saldo_caja = Decimal(cursor.fetchone()["saldo_final"])
 
         if Decimal(monto) > saldo_caja:
-            st.error(
-                f"❌ Saldo actual en caja: ${saldo_caja:.2f}\n"
-                f"No alcanza para otorgar un préstamo de ${monto:.2f}."
-            )
+            st.error(f"❌ Saldo insuficiente en caja. Saldo actual: ${saldo_caja:.2f}")
             return
 
-        # --------------------------------------------------
-        # CÁLCULO DE INTERÉS TOTAL
-        # --------------------------------------------------
-        interes_total = (Decimal(monto) * Decimal(tasa) / Decimal(100))
-        saldo_total = Decimal(monto) + interes_total
+        # -----------------------------------------------
+        # CALCULO DEL INTERÉS TOTAL
+        # -----------------------------------------------
+        interes_total = Decimal(monto) * (Decimal(tasa) / 100)
 
-        # --------------------------------------------------
+        # -----------------------------------------------
         # REGISTRAR PRÉSTAMO
-        # --------------------------------------------------
+        # -----------------------------------------------
         cursor.execute("""
             INSERT INTO Prestamo(
                 `Fecha del préstamo`,
@@ -130,30 +126,26 @@ def autorizar_prestamo():
             VALUES (%s,%s,%s,%s,%s,%s,%s,'activo',1,%s,%s)
         """, (
             fecha_prestamo,
-            Decimal(monto),
+            monto,
             interes_total,
             tasa,
             plazo,
             cuotas,
-            saldo_total,
+            monto + interes_total,
             id_socia,
             id_caja
         ))
 
-        # --------------------------------------------------
-        # REGISTRAR EGRESO EN CAJA (DESCUENTO REAL)
-        # --------------------------------------------------
+        # -----------------------------------------------
+        # REGISTRA EGRESO EN CAJA
+        # -----------------------------------------------
         registrar_movimiento(
             id_caja=id_caja,
             tipo="Egreso",
-            categoria=f"Préstamo otorgado a {socia_sel}",
-            monto=Decimal(monto)
+            categoria=f"Préstamo otorgado – {socia_sel}",
+            monto=monto
         )
 
         con.commit()
+        
         st.success("✔ Préstamo autorizado correctamente y descontado de caja.")
-        st.info(f"💵 Interés total: ${interes_total:.2f}")
-        st.info(f"📌 Saldo pendiente inicial: ${saldo_total:.2f}")
-
-        cursor.close()
-        con.close()
