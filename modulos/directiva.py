@@ -24,6 +24,7 @@ from modulos.reglas import gestionar_reglas
 
 
 
+
 # ============================================================
 # PANEL PRINCIPAL — DIRECTIVA
 # ============================================================
@@ -82,7 +83,7 @@ def interfaz_directiva():
     if menu == "Registro de asistencia":
         pagina_asistencia()
     elif menu == "Aplicar multas":
-        pagina_multas()  # YA INCLUYE FILTROS
+        pagina_multas()
     elif menu == "Registrar nuevas socias":
         pagina_registro_socias()
     elif menu == "Autorizar préstamo":
@@ -102,6 +103,7 @@ def interfaz_directiva():
 
 
 
+
 # ============================================================
 # MULTAS — REGISTRO + FILTROS + PENDIENTES
 # ============================================================
@@ -117,7 +119,7 @@ def pagina_multas():
     # ============================================================
     st.subheader("➕ Registrar nueva multa")
 
-   cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
+    cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
     opciones_socias = {s["Nombre"]: s["Id_Socia"] for s in socias}
 
@@ -149,16 +151,16 @@ def pagina_multas():
 
     st.markdown("---")
 
+
+
     # ============================================================
     # 2️⃣ FILTROS
     # ============================================================
     st.subheader("🔎 Filtrar multas")
 
-    # FECHA
     fecha_filtro = st.date_input("Filtrar por fecha (opcional)", value=None)
     fecha_sql = fecha_filtro.strftime("%Y-%m-%d") if fecha_filtro else None
 
-    # SOCIA
     opciones_socias_f = {"Todas": None}
     for s in socias:
         opciones_socias_f[s["Nombre"]] = s["Id_Socia"]
@@ -166,7 +168,6 @@ def pagina_multas():
     socia_f = st.selectbox("Filtrar por socia:", opciones_socias_f.keys())
     id_socia_f = opciones_socias_f[socia_f]
 
-    # TIPO
     opciones_tipo_f = {"Todos": None}
     for t in tipos:
         opciones_tipo_f[t["Tipo de multa"]] = t["Id_Tipo_multa"]
@@ -174,8 +175,7 @@ def pagina_multas():
     tipo_f = st.selectbox("Filtrar por tipo:", opciones_tipo_f.keys())
     tipo_id_f = opciones_tipo_f[tipo_f]
 
-    # ESTADO
-    estado_f = st.selectbox("Filtrar por estado:", ["Todos", "A pagar", "Pagada"])
+    estado_f = st.selectbox("Estado:", ["Todos", "A pagar", "Pagada"])
 
     # ============================================================
     # 3️⃣ CONSULTA FILTRADA
@@ -188,6 +188,7 @@ def pagina_multas():
         JOIN `Tipo de multa` T ON T.Id_Tipo_multa = M.Id_Tipo_multa
         WHERE 1=1
     """
+
     params = []
 
     if fecha_sql:
@@ -220,6 +221,8 @@ def pagina_multas():
 
     st.markdown("---")
 
+
+
     # ============================================================
     # 4️⃣ MULTAS PENDIENTES (A pagar)
     # ============================================================
@@ -240,6 +243,7 @@ def pagina_multas():
         st.info("No hay multas pendientes.")
     else:
         for m in pendientes:
+
             c1, c2, c3, c4, c5 = st.columns([1,3,3,2,3])
 
             c1.write(m["Id_Multa"])
@@ -268,6 +272,8 @@ def pagina_multas():
 
     cursor.close()
     con.close()
+
+
 
 
 
@@ -400,6 +406,7 @@ def pagina_asistencia():
 
 
 
+
 # ============================================================
 # REGISTRO DE SOCIAS
 # ============================================================
@@ -436,28 +443,4 @@ def pagina_registro_socias():
             return
 
         if not (telefono_raw.isdigit() and len(telefono_raw) == 8):
-            st.error("El teléfono debe contener exactamente 8 dígitos.")
-            return
-
-        cursor.execute("""
-            INSERT INTO Socia(Nombre, DUI, Telefono, Sexo)
-            VALUES(%s, %s, %s, 'F')
-        """, (nombre, dui_formateado, telefono_raw))
-
-        con.commit()
-
-        st.success("Socia registrada correctamente.")
-        st.rerun()
-
-    cursor.execute("""
-        SELECT Id_Socia AS ID, Nombre, DUI, Telefono
-        FROM Socia ORDER BY Id_Socia ASC
-    """)
-    datos = cursor.fetchall()
-
-    if datos:
-        df = pd.DataFrame(datos, columns=["ID", "Nombre", "DUI", "Teléfono"])
-        st.dataframe(df, hide_index=True)
-
-    cursor.close()
-    con.close()
+            st.error("El teléfono debe contener exactamente 8 díg
