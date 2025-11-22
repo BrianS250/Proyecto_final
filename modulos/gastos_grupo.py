@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import date
-from modulos.config.conexion import obtener_conexion
+from modulos.conexion import obtener_conexion
 from modulos.caja import obtener_o_crear_reunion, registrar_movimiento
 from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
