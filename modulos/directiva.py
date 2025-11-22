@@ -422,9 +422,8 @@ else:
     con.close()
 
 
-
 # ============================================================
-# ASISTENCIA
+# ASISTENCIA (CORREGIDA + REGLAS INTERNAS)
 # ============================================================
 def pagina_asistencia():
 
@@ -436,7 +435,9 @@ def pagina_asistencia():
     fecha_raw = st.date_input("Fecha de reunión", date.today())
     fecha = fecha_raw.strftime("%Y-%m-%d")
 
-    # Reunión
+    # ============================================================
+    # Crear o recuperar reunión del día
+    # ============================================================
     cursor.execute("SELECT Id_Reunion FROM Reunion WHERE Fecha_reunion=%s", (fecha,))
     row = cursor.fetchone()
 
@@ -451,7 +452,9 @@ def pagina_asistencia():
         id_reunion = cursor.lastrowid
         st.success(f"Reunión creada (ID {id_reunion}).")
 
-    # Socias
+    # ============================================================
+    # Obtener socias
+    # ============================================================
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
 
@@ -460,74 +463,50 @@ def pagina_asistencia():
     registro = {}
     for s in socias:
         estado = st.selectbox(
-    f"{s['Id_Socia']} - {s['Nombre']}",
-    ["Presente", "Ausente", "Permiso"],
-    key=f"asis_{s['Id_Socia']}"
-)
-
+            f"{s['Id_Socia']} - {s['Nombre']}",
+            ["Presente", "Ausente", "Permiso"],
+            key=f"asis_{s['Id_Socia']}"
+        )
         registro[s["Id_Socia"]] = estado
 
-    # Guardar
-    # ------------------------------------------
-# GUARDAR ASISTENCIA (NUEVA LÓGICA COMPLETA)
-# ------------------------------------------
-from modulos.reglas_utils import obtener_reglas
+    # ============================================================
+    # GUARDAR ASISTENCIA + REGLAS INTERNAS
+    # ============================================================
+    from modulos.reglas_utils import obtener_reglas
 
-if st.button("💾 Guardar asistencia"):
+    if st.button("💾 Guardar asistencia"):
 
-    reglas = obtener_reglas()
+        reglas = obtener_reglas()
 
-    multa_inasistencia = float(reglas["multa_inasistencia"])
-    permisos_validos = reglas["permisos_validos"]
-    lista_permisos = [p.strip().lower() for p in permisos_validos.split(",")]
+        multa_inasistencia = float(reglas["multa_inasistencia"])
+        permisos_validos = reglas["permisos_validos"]
+        lista_permisos = [p.strip().lower() for p in permisos_validos.split(",")]
 
-    for id_socia, estado in registro.items():
+        for id_socia, estado in registro.items():
 
-        # -----------------------------------
-        # Determinar estado a guardar en BD
-        # -----------------------------------
-        if estado == "Presente":
-            est = "Presente"
+            # ----------------------------------
+            # Determinar estado a guardar
+            # ----------------------------------
+            if estado == "Presente":
+                est = "Presente"
 
-        elif estado == "Permiso":
-            est = "Permiso"
+            elif estado == "Permiso":
+                est = "Permiso"
 
-        else:   # Ausente SIN permiso
-            est = "Ausente"
+            else:
+                est = "Ausente"
 
-            # Aplicar MULTA automática
-            cursor.execute("""
-                INSERT INTO Multa(Monto, Fecha_aplicacion, Estado, Id_Tipo_multa, Id_Socia)
-                VALUES (%s, %s, 'A pagar', 1, %s)
-            """, (multa_inasistencia, fecha, id_socia))
+                # ===============================
+                # MULTA AUTOMÁTICA SI NO TIENE PERMISO
+                # ===============================
+                cursor.execute("""
+                    INSERT INTO Multa(Monto, Fecha_aplicacion, Estado, Id_Tipo_multa, Id_Socia)
+                    VALUES (%s, %s, 'A pagar', 1, %s)
+                """, (multa_inasistencia, fecha, id_socia))
 
-        # -----------------------------------
-        # Guardar asistencia (insert/update)
-        # -----------------------------------
-        cursor.execute("""
-            SELECT Id_Asistencia FROM Asistencia
-            WHERE Id_Reunion=%s AND Id_Socia=%s
-        """, (id_reunion, id_socia))
-
-        existe = cursor.fetchone()
-
-        if existe:
-            cursor.execute("""
-                UPDATE Asistencia
-                SET Estado_asistencia=%s, Fecha=%s
-                WHERE Id_Asistencia=%s
-            """, (est, fecha, existe["Id_Asistencia"]))
-        else:
-            cursor.execute("""
-                INSERT INTO Asistencia(Id_Reunion, Id_Socia, Estado_asistencia, Fecha)
-                VALUES(%s,%s,%s,%s)
-            """, (id_reunion, id_socia, est, fecha))
-
-    con.commit()
-    st.success("✔ Asistencia registrada correctamente con reglas aplicadas.")
-    st.rerun()
-
-
+            # ===============================
+            # Guardar asistencia en BD
+            # ===============================
             cursor.execute("""
                 SELECT Id_Asistencia FROM Asistencia
                 WHERE Id_Reunion=%s AND Id_Socia=%s
@@ -548,8 +527,12 @@ if st.button("💾 Guardar asistencia"):
                 """, (id_reunion, id_socia, est, fecha))
 
         con.commit()
-        st.success("✔ Asistencia registrada.")
+        st.success("✔ Asistencia registrada correctamente con reglas aplicadas.")
+        st.rerun()
 
+    # ============================================================
+    # MOSTRAR ASISTENCIA DEL DÍA
+    # ============================================================
     cursor.execute("""
         SELECT S.Id_Socia, S.Nombre, A.Estado_asistencia
         FROM Asistencia A
@@ -565,8 +548,6 @@ if st.button("💾 Guardar asistencia"):
 
     cursor.close()
     con.close()
-
-
 
 # ============================================================
 # REGISTRO DE SOCIAS
