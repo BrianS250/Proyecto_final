@@ -60,6 +60,7 @@ def interfaz_directiva():
         st.session_state.clear()
         st.rerun()
 
+    # 🔥 MENÚ COMPLETO (YA CON FILTRAR MULTAS)
     menu = st.sidebar.radio(
         "Selección rápida:",
         [
@@ -103,11 +104,11 @@ def interfaz_directiva():
 
 
 # ============================================================
-# FILTRO DE MULTAS (NUEVO)
+# 🔎 FILTRAR MULTAS (NUEVO)
 # ============================================================
 def pagina_filtrar_multas():
 
-    st.header("🔎 Filtro de multas registradas")
+    st.header("🔎 Filtrar multas registradas")
 
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
@@ -134,7 +135,7 @@ def pagina_filtrar_multas():
     # FILTRO POR ESTADO
     estado_sel = st.selectbox("📌 Filtrar por estado:", ["Todos", "A pagar", "Pagada"])
 
-    # SQL BASE
+    # SQL DINÁMICO
     query = """
         SELECT M.Id_Multa, S.Nombre, T.`Tipo de multa`,
                M.Monto, M.Estado, M.Fecha_aplicacion
@@ -177,7 +178,7 @@ def pagina_filtrar_multas():
 
 
 # ============================================================
-# ASISTENCIA
+# 📝 ASISTENCIA  (SIN CAMBIOS)
 # ============================================================
 def pagina_asistencia():
 
@@ -297,9 +298,8 @@ def pagina_asistencia():
 
 
 
-
 # ============================================================
-# MULTAS
+# ⚠️ MULTAS  (CORREGIDO)
 # ============================================================
 def pagina_multas():
 
@@ -338,59 +338,52 @@ def pagina_multas():
         st.rerun()
 
     st.markdown("---")
-    st.subheader("📋 Multas registradas")
+    st.subheader("📋 Multas pendientes")
 
+    # SOLO MULTAS “A PAGAR”
     cursor.execute("""
         SELECT M.Id_Multa, S.Nombre, T.`Tipo de multa`,
                M.Monto, M.Estado, M.Fecha_aplicacion
         FROM Multa M
         JOIN Socia S ON S.Id_Socia=M.Id_Socia
-        JOIN `Tipo de multa` T ON T.Id_Tipo_multa=M.Id_Tipo_multa
+        JOIN `Tipo de multa` T ON T.Id_Tipo_multa = M.Id_Tipo_multa
+        WHERE M.Estado='A pagar'
         ORDER BY M.Id_Multa DESC
     """)
     multas = cursor.fetchall()
 
     for mid, nombre, tipo, monto, estado_actual, fecha_m in multas:
 
-        c1, c2, c3, c4, c5, c6 = st.columns([1,3,3,2,2,2])
+        c1, c2, c3, c4, c5 = st.columns([1,3,3,2,3])
 
         c1.write(mid)
         c2.write(nombre)
         c3.write(tipo)
         c4.write(f"${monto}")
 
-        nuevo_estado = c5.selectbox(
-            " ",
-            ["A pagar", "Pagada"],
-            index=0 if estado_actual == "A pagar" else 1,
-            key=f"upd{mid}"
-        )
+        if c5.button("Marcar como pagada", key=f"btn{mid}"):
 
-        if c6.button("Actualizar", key=f"btn{mid}"):
-
-            if estado_actual == "A pagar" and nuevo_estado == "Pagada":
-
-                id_caja = obtener_o_crear_reunion(fecha_m)
-                registrar_movimiento(
-                    id_caja,
-                    "Ingreso",
-                    f"Pago de multa – {nombre}",
-                    monto
-                )
+            id_caja = obtener_o_crear_reunion(fecha_m)
+            registrar_movimiento(
+                id_caja,
+                "Ingreso",
+                f"Pago de multa – {nombre}",
+                monto
+            )
 
             cursor.execute("""
-                UPDATE Multa SET Estado=%s WHERE Id_Multa=%s
-            """, (nuevo_estado, mid))
+                UPDATE Multa SET Estado='Pagada' WHERE Id_Multa=%s
+            """, (mid,))
 
             con.commit()
-            st.success(f"Multa {mid} actualizada.")
+            st.success(f"Multa {mid} pagada.")
             st.rerun()
 
 
 
 
 # ============================================================
-# REGISTRO DE SOCIAS
+# REGISTRO DE SOCIAS (SIN CAMBIOS)
 # ============================================================
 def pagina_registro_socias():
 
@@ -400,7 +393,6 @@ def pagina_registro_socias():
     cursor = con.cursor()
 
     nombre = st.text_input("Nombre completo")
-
     dui_raw = st.text_input("DUI (9 dígitos, sin guion)", max_chars=9)
 
     dui_formateado = ""
