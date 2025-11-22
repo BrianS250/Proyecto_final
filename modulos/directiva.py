@@ -177,7 +177,17 @@ def pagina_multas():
         monto = multa_inasistencia
         st.info(f"💲 Multa automática según reglamento: **${multa_inasistencia}**")
     else:
-        monto = st.number_input("Monto ($)", min_value=0.25, step=0.25)
+       from modulos.reglas_utils import obtener_reglas
+reglas = obtener_reglas()
+
+multa_inasistencia = float(reglas["multa_inasistencia"])
+
+if tipo_sel.lower() == "inasistencia":
+    st.info(f"Monto definido por reglamento: **${multa_inasistencia:.2f}**")
+    monto = multa_inasistencia
+else:
+    monto = st.number_input("Monto ($)", min_value=0.25, step=0.25)
+
 
     fecha_raw = st.date_input("📅 Fecha", date.today())
     fecha = fecha_raw.strftime("%Y-%m-%d")
@@ -206,20 +216,21 @@ def pagina_multas():
     # ---------------------------------------------
     if st.button("💾 Registrar multa"):
 
-        cursor.execute("""
-            INSERT INTO Multa(Monto, Fecha_aplicacion, Estado, Id_Tipo_multa, Id_Socia)
-            VALUES(%s, %s, %s, %s, %s)
-        """, (
-            monto,
-            fecha,
-            estado,
-            1 if tipo_multa == "Inasistencia" else 2,
-            id_socia
-        ))
+    # Si es inasistencia → usar monto de reglas internas
+    if tipo_sel.lower() == "inasistencia":
+        monto_final = multa_inasistencia
+    else:
+        monto_final = monto
 
-        con.commit()
-        st.success("✔ Multa registrada correctamente.")
-        st.rerun()
+    cursor.execute("""
+        INSERT INTO Multa(Monto, Fecha_aplicacion, Estado, Id_Tipo_multa, Id_Socia)
+        VALUES (%s,%s,%s,%s,%s)
+    """, (monto_final, fecha, estado_sel, id_tipo, id_socia))
+
+    con.commit()
+    st.success("✔ Multa registrada correctamente.")
+    st.rerun()
+
 
     # ---------------------------------------------
     # LISTADO DE MULTAS
@@ -449,16 +460,73 @@ def pagina_asistencia():
     registro = {}
     for s in socias:
         estado = st.selectbox(
-            f"{s['Id_Socia']} - {s['Nombre']}",
-            ["SI", "NO"],
-            key=f"asis_{s['Id_Socia']}"
-        )
+    f"{s['Id_Socia']} - {s['Nombre']}",
+    ["Presente", "Ausente", "Permiso"],
+    key=f"asis_{s['Id_Socia']}"
+)
+
         registro[s["Id_Socia"]] = estado
 
     # Guardar
-    if st.button("💾 Guardar asistencia"):
-        for id_socia, valor in registro.items():
-            est = "Presente" if valor == "SI" else "Ausente"
+    # ------------------------------------------
+# GUARDAR ASISTENCIA (NUEVA LÓGICA COMPLETA)
+# ------------------------------------------
+from modulos.reglas_utils import obtener_reglas
+
+if st.button("💾 Guardar asistencia"):
+
+    reglas = obtener_reglas()
+
+    multa_inasistencia = float(reglas["multa_inasistencia"])
+    permisos_validos = reglas["permisos_validos"]
+    lista_permisos = [p.strip().lower() for p in permisos_validos.split(",")]
+
+    for id_socia, estado in registro.items():
+
+        # -----------------------------------
+        # Determinar estado a guardar en BD
+        # -----------------------------------
+        if estado == "Presente":
+            est = "Presente"
+
+        elif estado == "Permiso":
+            est = "Permiso"
+
+        else:   # Ausente SIN permiso
+            est = "Ausente"
+
+            # Aplicar MULTA automática
+            cursor.execute("""
+                INSERT INTO Multa(Monto, Fecha_aplicacion, Estado, Id_Tipo_multa, Id_Socia)
+                VALUES (%s, %s, 'A pagar', 1, %s)
+            """, (multa_inasistencia, fecha, id_socia))
+
+        # -----------------------------------
+        # Guardar asistencia (insert/update)
+        # -----------------------------------
+        cursor.execute("""
+            SELECT Id_Asistencia FROM Asistencia
+            WHERE Id_Reunion=%s AND Id_Socia=%s
+        """, (id_reunion, id_socia))
+
+        existe = cursor.fetchone()
+
+        if existe:
+            cursor.execute("""
+                UPDATE Asistencia
+                SET Estado_asistencia=%s, Fecha=%s
+                WHERE Id_Asistencia=%s
+            """, (est, fecha, existe["Id_Asistencia"]))
+        else:
+            cursor.execute("""
+                INSERT INTO Asistencia(Id_Reunion, Id_Socia, Estado_asistencia, Fecha)
+                VALUES(%s,%s,%s,%s)
+            """, (id_reunion, id_socia, est, fecha))
+
+    con.commit()
+    st.success("✔ Asistencia registrada correctamente con reglas aplicadas.")
+    st.rerun()
+
 
             cursor.execute("""
                 SELECT Id_Asistencia FROM Asistencia
