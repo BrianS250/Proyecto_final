@@ -3,10 +3,24 @@ from datetime import date
 from modulos.conexion import obtener_conexion
 from modulos.caja import obtener_o_crear_reunion, registrar_movimiento
 
+# 🔗 NUEVO — para enlazar ahorro mínimo desde reglas internas
+from modulos.reglas_utils import obtener_reglas
+
 
 def ahorro():
 
     st.header("💰 Registro de Ahorros")
+
+    # ==========================================================
+    # 🔗 LEER REGLAS INTERNAS (ahorro mínimo)
+    # ==========================================================
+    reglas = obtener_reglas()
+
+    if not reglas:
+        st.error("⚠ No existen reglas internas registradas. Regístrelas primero.")
+        return
+
+    ahorro_minimo = float(reglas["ahorro_minimo"])   # ← valor tomado del reglamento
 
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
@@ -63,7 +77,14 @@ def ahorro():
     fecha_aporte_raw = st.date_input("📅 Fecha del aporte", value=date.today())
     fecha_aporte = fecha_aporte_raw.strftime("%Y-%m-%d")
 
-    monto = st.number_input("💵 Monto del aporte ($)", min_value=1.00, step=1.00)
+    # 🔗 APLICAR AHORRO MÍNIMO
+    monto = st.number_input(
+        "💵 Monto del aporte ($)",
+        min_value=ahorro_minimo,         # ← valor desde reglas
+        value=ahorro_minimo,
+        step=0.25
+    )
+
     tipo = st.selectbox("📌 Tipo de aporte", ["Ordinario", "Extraordinario"])
     comprobante = st.text_input("📎 Comprobante digital")
 
