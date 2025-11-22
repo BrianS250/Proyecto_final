@@ -120,9 +120,9 @@ def pagina_multas():
     st.subheader("➕ Registrar nueva multa")
 
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
-socias = cursor.fetchall()
-
+    socias = cursor.fetchall()
     opciones_socias = {s["Nombre"]: s["Id_Socia"] for s in socias}
+
 
     socia_sel = st.selectbox("Socia:", opciones_socias.keys())
     id_socia = opciones_socias[socia_sel]
