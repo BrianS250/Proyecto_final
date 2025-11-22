@@ -39,6 +39,7 @@ def pago_prestamo():
         st.info("ℹ La socia no tiene un préstamo activo.")
         return
 
+    # Datos del préstamo
     id_prestamo = prestamo["Id_Préstamo"]
     monto = prestamo["Monto prestado"]
     interes_total = prestamo["Interes_total"]
@@ -75,5 +76,92 @@ def pago_prestamo():
 
     if st.button("💵 Registrar pago"):
 
+        # 1️⃣ Calcular capital pagado
         capital_pagado = round(cuota_fija - interes_por_cuota, 2)
-        nuevo_saldo = round(saldo_pendiente - cuota_fi
+
+        # 2️⃣ Nuevo saldo
+        nuevo_saldo = round(saldo_pendiente - cuota_fija, 2)
+        if nuevo_saldo < 0:
+            nuevo_saldo = 0
+
+        # ======================================================
+        # 3️⃣ REGISTRAR INGRESO EN CAJA
+        # ======================================================
+        id_caja = obtener_o_crear_reunion(fecha_pago)
+
+        registrar_movimiento(
+            id_caja,
+            "Ingreso",
+            f"Pago de préstamo – {socia_sel}",
+            float(cuota_fija)
+        )
+
+        # ======================================================
+        # 4️⃣ GUARDAR EN TABLA Pago del prestamo
+        # ======================================================
+        cursor.execute("""
+            INSERT INTO `Pago del prestamo`(
+                `Fecha de pago`,
+                `Monto abonado`,
+                `Interés pagado`,
+                `Capital pagado`,
+                `Saldo restante`,
+                `Id_Prestamo`,
+                `Id_Caja`
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            fecha_pago,
+            cuota_fija,
+            interes_por_cuota,
+            capital_pagado,
+            nuevo_saldo,
+            id_prestamo,
+            id_caja
+        ))
+
+        # ======================================================
+        # 5️⃣ ACTUALIZAR PRÉSTAMO
+        # ======================================================
+        if nuevo_saldo == 0:
+            cursor.execute("""
+                UPDATE Prestamo
+                SET `Saldo pendiente`=0,
+                    Estado_del_prestamo='pagado'
+                WHERE Id_Préstamo=%s
+            """, (id_prestamo,))
+        else:
+            cursor.execute("""
+                UPDATE Prestamo
+                SET `Saldo pendiente`=%s
+                WHERE Id_Préstamo=%s
+            """, (nuevo_saldo, id_prestamo))
+
+        con.commit()
+        st.success("✔ Pago registrado correctamente.")
+        st.info(f"💵 Nuevo saldo pendiente: **${nuevo_saldo:.2f}**")
+
+        st.rerun()
+
+    # ======================================================
+    # HISTORIAL DE PAGOS
+    # ======================================================
+    st.subheader("📜 Historial de pagos")
+
+    cursor.execute("""
+        SELECT *
+        FROM `Pago del prestamo`
+        WHERE Id_Prestamo=%s
+        ORDER BY Id_Pago ASC
+    """, (id_prestamo,))
+
+    pagos = cursor.fetchall()
+
+    if pagos:
+        df = pd.DataFrame(pagos)
+        st.dataframe(df, hide_index=True)
+    else:
+        st.info("La socia aún no tiene pagos registrados.")
+
+    cursor.close()
+    con.close()
