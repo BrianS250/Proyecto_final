@@ -1,152 +1,112 @@
 import streamlit as st
 from datetime import date
-from modulos.conexion import obtener_conexion
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from modulos.config.conexion import obtener_conexion
+from modulos.caja import obtener_o_crear_reunion, registrar_movimiento
+from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.pagesizes import letter
-import tempfile
 
 
-# -----------------------------------------------------------
-# Función principal
-# -----------------------------------------------------------
 def gastos_grupo():
 
-    st.subheader("💸 Registro de Gastos del Grupo")
+    st.subheader("💸 Registrar gastos del grupo")
 
+    # Fecha del gasto
+    fecha = st.date_input("Fecha del gasto", value=date.today())
+
+    # Responsable
+    responsable = st.text_input("Nombre de la persona responsable del gasto")
+
+    # DUI VALIDADO (9 dígitos exactos)
+    dui = st.text_input("DUI (9 dígitos)")
+
+    # Concepto opcional
+    descripcion = st.text_input("Concepto del gasto (opcional)")
+
+    # Monto
+    monto = st.number_input("Monto del gasto ($)", min_value=0.01, step=0.50)
+
+    # ---------------------------------------------------------
+    # 📌 Obtener la reunión del día (SE CREA AUTOMÁTICAMENTE)
+    # ---------------------------------------------------------
+    id_caja = obtener_o_crear_reunion(str(fecha))
+
+    # Obtener saldo actual
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
+    cursor.execute("SELECT saldo_final FROM caja_reunion WHERE id_caja = %s", (id_caja,))
+    saldo = cursor.fetchone()["saldo_final"]
 
-    hoy = date.today()
+    st.info(f"💰 Saldo disponible en caja para {fecha}: ${saldo:,.2f}")
 
-    # -----------------------------------------------------------
-    # OBTENER REUNIÓN ACTUAL
-    # -----------------------------------------------------------
-    cursor.execute("SELECT * FROM caja_reunion WHERE fecha = %s", (hoy,))
-    reunion = cursor.fetchone()
+    # ---------------------------------------------------------
+    # BOTÓN
+    # ---------------------------------------------------------
+    if st.button("🧾 Registrar gasto"):
 
-    if not reunion:
-        st.error("❌ No existe una reunión creada para hoy.")
-        return
-
-    id_caja = reunion["id_caja"]
-    saldo_disponible = float(reunion["saldo_final"])
-
-    # -----------------------------------------------------------
-    # FORMULARIO
-    # -----------------------------------------------------------
-
-    responsable = st.text_input("👤 Nombre del responsable del gasto")
-
-    # DUI — SOLO 9 DÍGITOS NUMÉRICOS
-    dui = st.text_input("DUI (9 dígitos)", max_chars=9)
-
-    # VALIDACIÓN DUI
-    if dui:
-        if not dui.isdigit():
-            st.error("❌ El DUI solo debe contener números.")
-            return
-
-        if len(dui) < 9:
+        # VALIDACIÓN DUI (solo si NO tiene 9 dígitos)
+        if len(dui) != 9 or not dui.isdigit():
             st.error("❌ Debe ingresar un DUI válido de 9 dígitos.")
             return
 
-    descripcion = st.text_input("Concepto del gasto (opcional)")
-    monto = st.number_input("Monto del gasto ($)", min_value=0.01, step=0.50)
-
-    st.info(f"💰 Saldo disponible en caja: **${saldo_disponible:.2f}**")
-
-    if st.button("💾 Registrar gasto"):
-
-        # Validar campos obligatorios
-        if responsable.strip() == "":
-            st.error("❌ El nombre del responsable es obligatorio.")
+        # VALIDAR SALDO ANTES DE REGISTRAR
+        if monto > saldo:
+            st.error("❌ No puede registrar este gasto. El monto excede el saldo disponible en caja.")
             return
 
-        if dui.strip() == "":
-            st.error("❌ El DUI es obligatorio.")
-            return
-
-        if monto <= 0:
-            st.error("❌ El monto debe ser mayor que cero.")
-            return
-
-        if monto > saldo_disponible:
-            st.error(
-                f"❌ No se puede registrar el gasto porque excede el saldo disponible (${saldo_disponible:.2f})."
-            )
-            return
-
-        # -----------------------------------------------------------
+        # -----------------------------------------------------
         # REGISTRAR GASTO EN BD
-        # -----------------------------------------------------------
+        # -----------------------------------------------------
         try:
-            cursor.execute(
-                """
-                INSERT INTO Gastos_grupo (Fecha_gasto, Descripcion, Monto, Responsable, DUI, Id_Caja)
+            cursor.execute("""
+                INSERT INTO Gastos_grupo(Fecha_gasto, Descripcion, Monto, Responsable, DUI, Id_Caja)
                 VALUES (%s, %s, %s, %s, %s, %s)
-                """,
-                (hoy, descripcion, monto, responsable, dui, id_caja),
-            )
-
-            # REGISTRAR MOVIMIENTO
-            cursor.execute(
-                """
-                INSERT INTO caja_movimientos (id_caja, tipo, categoria, monto)
-                VALUES (%s, 'Egreso', 'Gasto del grupo', %s)
-                """,
-                (id_caja, monto),
-            )
-
-            # ACTUALIZAR SALDO EN caja_reunion
-            nuevo_saldo = saldo_disponible - monto
-
-            cursor.execute(
-                """
-                UPDATE caja_reunion
-                SET egresos = egresos + %s,
-                    saldo_final = %s
-                WHERE id_caja = %s
-                """,
-                (monto, nuevo_saldo, id_caja),
-            )
-
+            """, (fecha, descripcion, monto, responsable, dui, id_caja))
             con.commit()
 
-            st.success("✅ Gasto registrado y saldo actualizado correctamente.")
+            # Registrar movimiento en caja (EGRESO)
+            registrar_movimiento(id_caja, "Egreso", "Gasto del grupo", monto)
 
-            # -----------------------------------------------------------
-            # GENERAR PDF
-            # -----------------------------------------------------------
+            # Actualizar saldo en caja_reunion
+            cursor.execute("""
+                UPDATE caja_reunion
+                SET egresos = egresos + %s,
+                    saldo_final = saldo_final - %s
+                WHERE id_caja = %s
+            """, (monto, monto, id_caja))
+            con.commit()
 
-            temp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-            doc = SimpleDocTemplate(temp.name, pagesize=letter)
+            st.success("✅ Gasto registrado correctamente.")
+
+        except Exception as e:
+            st.error(f"❌ Error al registrar el gasto: {e}")
+            return
+
+        # -----------------------------------------------------
+        # GENERAR PDF
+        # -----------------------------------------------------
+        try:
+            archivo_pdf = f"gasto_{id_caja}.pdf"
+            doc = SimpleDocTemplate(archivo_pdf)
             styles = getSampleStyleSheet()
-            story = []
+            contenido = [
+                Paragraph("<b>Resumen del Gasto</b>", styles["Title"]),
+                Paragraph(f"Fecha: {fecha}", styles["Normal"]),
+                Paragraph(f"Responsable: {responsable}", styles["Normal"]),
+                Paragraph(f"DUI: {dui}", styles["Normal"]),
+                Paragraph(f"Descripción: {descripcion}", styles["Normal"]),
+                Paragraph(f"Monto: ${monto:,.2f}", styles["Normal"]),
+                Paragraph(f"Saldo previo: ${saldo:,.2f}", styles["Normal"]),
+                Paragraph(f"Saldo final: ${(saldo - monto):,.2f}", styles["Normal"]),
+            ]
+            doc.build(contenido)
 
-            story.append(Paragraph("<b>Resumen del Gasto del Grupo</b>", styles["Title"]))
-            story.append(Spacer(1, 12))
-            story.append(Paragraph(f"<b>Fecha:</b> {hoy}", styles["Normal"]))
-            story.append(Paragraph(f"<b>Responsable:</b> {responsable}", styles["Normal"]))
-            story.append(Paragraph(f"<b>DUI:</b> {dui}", styles["Normal"]))
-            story.append(Paragraph(f"<b>Descripción:</b> {descripcion}", styles["Normal"]))
-            story.append(Paragraph(f"<b>Monto:</b> ${monto:.2f}", styles["Normal"]))
-            story.append(Paragraph(f"<b>Saldo previo:</b> ${saldo_disponible:.2f}", styles["Normal"]))
-            story.append(Paragraph(f"<b>Saldo actual:</b> ${nuevo_saldo:.2f}", styles["Normal"]))
-
-            doc.build(story)
-
-            with open(temp.name, "rb") as pdf_file:
+            with open(archivo_pdf, "rb") as f:
                 st.download_button(
-                    label="📄 Descargar PDF del resumen",
-                    data=pdf_file,
-                    file_name=f"Resumen_gasto_{hoy}.pdf",
-                    mime="application/pdf",
+                    label="📄 Descargar comprobante PDF",
+                    data=f,
+                    file_name=archivo_pdf,
+                    mime="application/pdf"
                 )
 
         except Exception as e:
-            st.error(f"❌ Error registrando el gasto: {e}")
-            con.rollback()
-
-    cursor.close()
-    con.close()
+            st.error(f"⚠ No se pudo generar el PDF: {e}")
