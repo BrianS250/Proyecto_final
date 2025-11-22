@@ -5,7 +5,7 @@ from decimal import Decimal
 from modulos.conexion import obtener_conexion
 from modulos.caja import obtener_o_crear_reunion, registrar_movimiento
 
-# 🔗 NUEVO
+# 🔗 NUEVO: reglas internas
 from modulos.reglas_utils import obtener_reglas
 
 
@@ -23,14 +23,16 @@ def autorizar_prestamo():
     reglas = obtener_reglas()
 
     if not reglas:
-        st.error("⚠ No existen reglas internas registradas. Regístrelas primero.")
+        st.error("⚠ No existen reglas internas registradas. Debe registrarlas primero.")
         return
 
-    # Valores desde reglas internas
-    monto_maximo = float(reglas["prestamo_maximo"])
-    tasa_defecto = float(reglas["interes_por_10"])
+    prestamo_maximo = float(reglas["prestamo_maximo"])
+    interes_por_10 = float(reglas["interes_por_10"])
     plazo_maximo = int(reglas["plazo_maximo"])
 
+    # ======================================================
+    # CONEXIÓN
+    # ======================================================
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
 
@@ -59,31 +61,32 @@ def autorizar_prestamo():
         socia_sel = st.selectbox("👩 Socia que recibe el préstamo", list(lista_socias.keys()))
         id_socia = lista_socias[socia_sel]
 
-        # 🔗 Valores traídos desde reglas internas
         monto = st.number_input(
             "💵 Monto prestado ($):",
             min_value=1.0,
-            max_value=monto_maximo,
-            value=1.0,
+            max_value=prestamo_maximo,
             step=1.0
         )
+        st.info(f"🔒 Monto máximo permitido por reglamento: **${prestamo_maximo}**")
 
+        # 📌 TASA AUTOMÁTICA POR CADA $10
+        tasa_calculada = (monto / 10) * interes_por_10
         tasa = st.number_input(
-            "📈 Tasa de interés (%)",
-            min_value=0.1,
-            value=tasa_defecto,
-            step=0.5
+            "📈 Interés total (%)",
+            min_value=0.0,
+            value=round(tasa_calculada, 2)
         )
+        st.info(f"⚙️ La tasa se calculó según regla interna: {interes_por_10}% por cada $10.")
 
         plazo = st.number_input(
             "🗓 Plazo (meses):",
             min_value=1,
-            max_value=plazo_maximo,
-            value=1
+            max_value=plazo_maximo
         )
+        st.info(f"🔒 Plazo máximo permitido: **{plazo_maximo} meses**")
 
         cuotas = st.number_input("📑 Número de cuotas:", min_value=1)
-        firma = st.text_input("✍️ Firma del directivo que autoriza")
+        firma = st.text_input("✍️ Firma de directiva que autoriza")
 
         enviar = st.form_submit_button("✅ Autorizar préstamo")
 
@@ -113,11 +116,10 @@ def autorizar_prestamo():
             SELECT `Saldo acumulado`
             FROM Ahorro
             WHERE Id_Socia=%s
-            ORDER BY Id_Ahorro DESC
+            ORDERORDER BY Id_Ahorro DESC
             LIMIT 1
         """, (id_socia,))
         row = cursor.fetchone()
-
         ahorro_total = Decimal(row["Saldo acumulado"]) if row else Decimal("0.00")
 
         if ahorro_total < Decimal(monto):
@@ -125,7 +127,7 @@ def autorizar_prestamo():
             return
 
         # -----------------------------------------------
-        # VALIDACIÓN 3 — SALDO EN CAJA ÚNICA
+        # VALIDACIÓN 3 — SALDO EN CAJA
         # -----------------------------------------------
         id_caja = obtener_o_crear_reunion(fecha_prestamo)
 
@@ -137,7 +139,7 @@ def autorizar_prestamo():
             return
 
         # -----------------------------------------------
-        # CÁLCULO DEL INTERÉS
+        # CÁLCULO DEL INTERÉS FINAL
         # -----------------------------------------------
         interes_total = Decimal(monto) * (Decimal(tasa) / 100)
         total_pagar = Decimal(monto) + interes_total
@@ -181,9 +183,9 @@ def autorizar_prestamo():
 
         cursor.execute("""
             INSERT INTO Ahorro
-            (`Fecha del aporte`, `Monto del aporte`, `Tipo de aporte`, `Comprobante digital`,
-             `Saldo acumulado`, Id_Socia, Id_Reunión, Id_Grupo, Id_Caja)
-            VALUES (%s, %s, 'Descuento préstamo', '---', %s, %s, NULL, 1, NULL)
+            (`Fecha del aporte`, `Monto del aporte`, `Tipo de aporte`,
+             `Comprobante digital`, `Saldo acumulado`, Id_Socia)
+            VALUES (%s, %s, 'Descuento préstamo', '---', %s, %s)
         """, (
             fecha_prestamo,
             -Decimal(monto),
@@ -192,13 +194,13 @@ def autorizar_prestamo():
         ))
 
         # -----------------------------------------------
-        # 6️⃣ REGISTRAR EGRESO EN CAJA ÚNICA
+        # 6️⃣ REGISTRAR EN CAJA
         # -----------------------------------------------
         registrar_movimiento(
-            id_caja=id_caja,
-            tipo="Egreso",
-            categoria=f"Préstamo otorgado – {socia_sel}",
-            monto=monto
+            id_caja,
+            "Egreso",
+            f"Préstamo otorgado – {socia_sel}",
+            monto
         )
 
         # -----------------------------------------------
@@ -212,8 +214,8 @@ def autorizar_prestamo():
 
             cursor.execute("""
                 INSERT INTO Cuotas_prestamo
-                (Id_Prestamo, Numero_cuota, Fecha_programada, Monto_cuota, Estado, Id_Caja)
-                VALUES (%s, %s, %s, %s, 'pendiente', NULL)
+                (Id_Prestamo, Numero_cuota, Fecha_programada, Monto_cuota, Estado)
+                VALUES (%s, %s, %s, %s, 'pendiente')
             """, (
                 id_prestamo_generado,
                 n,
@@ -240,3 +242,4 @@ def autorizar_prestamo():
         for n in range(1, cuotas + 1):
             fecha_cuota = (fecha_base + timedelta(days=15 * n)).strftime("%Y-%m-%d")
             st.write(f"➡ Cuota #{n}: {fecha_cuota} — ${round(valor_cuota, 2)}")
+
