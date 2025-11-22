@@ -1,11 +1,11 @@
-import streamlit as st
+import streamlit as st 
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from modulos.conexion import obtener_conexion
 from modulos.caja import obtener_o_crear_reunion, registrar_movimiento
 
-# 🔗 NUEVO: reglas internas
+# 🔗 REGLAS INTERNAS
 from modulos.reglas_utils import obtener_reglas
 
 
@@ -26,6 +26,7 @@ def autorizar_prestamo():
         st.error("⚠ No existen reglas internas registradas. Debe registrarlas primero.")
         return
 
+    # 🔹 Nuevos campos conectados al reglamento
     prestamo_maximo = float(reglas["prestamo_maximo"])
     interes_por_10 = float(reglas["interes_por_10"])
     plazo_maximo = int(reglas["plazo_maximo"])
@@ -61,29 +62,33 @@ def autorizar_prestamo():
         socia_sel = st.selectbox("👩 Socia que recibe el préstamo", list(lista_socias.keys()))
         id_socia = lista_socias[socia_sel]
 
+        # 🔒 Monto limitado por regla interna
         monto = st.number_input(
             "💵 Monto prestado ($):",
             min_value=1.0,
             max_value=prestamo_maximo,
             step=1.0
         )
-        st.info(f"🔒 Monto máximo permitido por reglamento: **${prestamo_maximo}**")
+        st.info(f"🔒 Monto máximo permitido según reglamento: **${prestamo_maximo}**")
 
-        # 📌 TASA AUTOMÁTICA POR CADA $10
+        # 📌 TASA AUTOMÁTICA (x% por cada $10)
         tasa_calculada = (monto / 10) * interes_por_10
+
         tasa = st.number_input(
             "📈 Interés total (%)",
             min_value=0.0,
             value=round(tasa_calculada, 2)
         )
-        st.info(f"⚙️ La tasa se calculó según regla interna: {interes_por_10}% por cada $10.")
 
+        st.info(f"⚙️ Tasa calculada por reglas internas: {interes_por_10}% por cada $10 de préstamo.")
+
+        # 🔒 Plazo máximo conectado al reglamento
         plazo = st.number_input(
             "🗓 Plazo (meses):",
             min_value=1,
             max_value=plazo_maximo
         )
-        st.info(f"🔒 Plazo máximo permitido: **{plazo_maximo} meses**")
+        st.info(f"🔒 Plazo máximo según reglamento: **{plazo_maximo} meses**")
 
         cuotas = st.number_input("📑 Número de cuotas:", min_value=1)
         firma = st.text_input("✍️ Firma de directiva que autoriza")
@@ -116,14 +121,15 @@ def autorizar_prestamo():
             SELECT `Saldo acumulado`
             FROM Ahorro
             WHERE Id_Socia=%s
-            ORDERORDER BY Id_Ahorro DESC
+            ORDER BY Id_Ahorro DESC
             LIMIT 1
         """, (id_socia,))
         row = cursor.fetchone()
+
         ahorro_total = Decimal(row["Saldo acumulado"]) if row else Decimal("0.00")
 
         if ahorro_total < Decimal(monto):
-            st.error(f"❌ La socia solo tiene ${ahorro_total:.2f}. No puede solicitar ${monto:.2f}.")
+            st.error(f"❌ La socia tiene ${ahorro_total:.2f} de ahorro. No puede solicitar ${monto:.2f}.")
             return
 
         # -----------------------------------------------
@@ -204,7 +210,7 @@ def autorizar_prestamo():
         )
 
         # -----------------------------------------------
-        # 7️⃣ GENERAR CUOTAS AUTOMÁTICAS
+        # 7️⃣ GENERAR CUOTAS AUTOMÁTICAS (cada 15 días)
         # -----------------------------------------------
         valor_cuota = total_pagar / Decimal(cuotas)
         fecha_base = datetime.strptime(fecha_prestamo, "%Y-%m-%d")
@@ -236,10 +242,9 @@ def autorizar_prestamo():
         st.write(f"**Interés total:** ${interes_total:.2f}")
         st.write(f"**Total a pagar:** ${total_pagar:.2f}")
         st.write(f"**Cuotas:** {cuotas}")
-        st.write(f"**Valor por cuota:** ${round(valor_cuota, 2)}")
+        st.write(f"**Valor de cada cuota:** ${round(valor_cuota, 2)}")
 
         st.write("**📅 Calendario de pagos:**")
         for n in range(1, cuotas + 1):
             fecha_cuota = (fecha_base + timedelta(days=15 * n)).strftime("%Y-%m-%d")
             st.write(f"➡ Cuota #{n}: {fecha_cuota} — ${round(valor_cuota, 2)}")
-
