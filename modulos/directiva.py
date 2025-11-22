@@ -21,6 +21,8 @@ from modulos.cierre_ciclo import cierre_ciclo
 
 # REGLAS INTERNAS
 from modulos.reglas import gestionar_reglas
+from modulos.reglas_utils import obtener_reglas
+
 
 
 # ============================================================
