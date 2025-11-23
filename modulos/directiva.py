@@ -208,7 +208,7 @@ def pagina_asistencia():
 
 
 # ============================================================
-# REGISTRO DE NUEVAS SOCIAS — 🎯 MEJORA APLICADA
+# REGISTRO DE NUEVAS SOCIAS — ✔ Validación de DUI y Teléfono
 # ============================================================
 def pagina_registro_socias():
 
@@ -221,7 +221,6 @@ def pagina_registro_socias():
     dui = st.text_input("Número de DUI (9 dígitos):", max_chars=9)
     telefono = st.text_input("Número de teléfono (8 dígitos):", max_chars=8)
 
-    # Validación
     if st.button("Registrar socia"):
 
         if nombre.strip() == "":
@@ -229,11 +228,11 @@ def pagina_registro_socias():
             return
 
         if not dui.isdigit() or len(dui) != 9:
-            st.warning("El DUI debe contener exactamente 9 dígitos numéricos.")
+            st.warning("El DUI debe contener exactamente **9 dígitos numéricos**.")
             return
 
         if not telefono.isdigit() or len(telefono) != 8:
-            st.warning("El teléfono debe contener exactamente 8 dígitos numéricos.")
+            st.warning("El teléfono debe contener exactamente **8 dígitos numéricos**.")
             return
 
         cur.execute("""
@@ -245,7 +244,6 @@ def pagina_registro_socias():
         st.success(f"Socia '{nombre}' registrada correctamente.")
         st.rerun()
 
-    # Mostrar lista
     cur.execute("SELECT Id_Socia, Nombre, DUI FROM Socia ORDER BY Id_Socia ASC")
     data = cur.fetchall()
 
