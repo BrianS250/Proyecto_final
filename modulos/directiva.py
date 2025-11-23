@@ -208,7 +208,7 @@ def pagina_asistencia():
 
 
 # ============================================================
-# REGISTRO DE NUEVAS SOCIAS — SOLO NÚMEROS, SIN LETRAS
+# REGISTRO DE NUEVAS SOCIAS — DUI Y TELÉFONO SOLO NÚMEROS
 # ============================================================
 def pagina_registro_socias():
 
@@ -223,30 +223,48 @@ def pagina_registro_socias():
     nombre = st.text_input("Nombre completo de la socia:")
 
     # ---------------------------
-    # CAMPO: DUI (exactamente 9 dígitos, solo números)
+    # CAMPO DUI (bloquea letras)
     # ---------------------------
     dui = st.text_input(
         "Número de DUI (9 dígitos):",
-        max_chars=9
+        max_chars=9,
+        placeholder="Solo números",
+        key="dui",
     )
 
-    # Validación: solo números
-    if dui and not dui.isdigit():
-        st.warning("El DUI solo puede contener números.")
-        return
+    # BLOQUEO REAL DE LETRAS
+    st.html("""
+    <script>
+    const duiInput = window.parent.document.querySelector('input[key="dui"]');
+    if (duiInput) {
+        duiInput.addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+    }
+    </script>
+    """)
 
     # ---------------------------
-    # CAMPO: TELÉFONO (exactamente 8 dígitos, solo números)
+    # CAMPO TELÉFONO (bloquea letras)
     # ---------------------------
     telefono = st.text_input(
         "Número de teléfono (8 dígitos):",
-        max_chars=8
+        max_chars=8,
+        placeholder="Solo números",
+        key="tel"
     )
 
-    # Validación: solo números
-    if telefono and not telefono.isdigit():
-        st.warning("El teléfono solo puede contener números.")
-        return
+    # BLOQUEO REAL DE LETRAS
+    st.html("""
+    <script>
+    const telInput = window.parent.document.querySelector('input[key="tel"]');
+    if (telInput) {
+        telInput.addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+    }
+    </script>
+    """)
 
     # ---------------------------
     # BOTÓN DE REGISTRO
