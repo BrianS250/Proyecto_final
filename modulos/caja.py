@@ -1,177 +1,141 @@
 import streamlit as st
-from decimal import Decimal
 from datetime import date
+from decimal import Decimal
+
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+
 from modulos.conexion import obtener_conexion
+from modulos.caja import obtener_o_crear_reunion, registrar_movimiento, obtener_saldo_actual
 
 
-# ================================================================
-# 🟢 1. OBTENER O CREAR REUNIÓN (correctamente integrado a caja real)
-# ================================================================
-def obtener_o_crear_reunion(fecha):
-    """
-    Crea o recupera una reunión por fecha.
-    Ahora sí toma el saldo real para actualizar correctamente ingresos.
-    """
+# ------------------------------------------------------------
+# PDF – Comprobante de gasto
+# ------------------------------------------------------------
+def generar_pdf_gasto(fecha, categoria, monto, saldo_antes, saldo_despues):
+    nombre_pdf = f"gasto_{fecha}.pdf"
+    doc = SimpleDocTemplate(nombre_pdf, pagesize=letter)
+
+    estilos = getSampleStyleSheet()
+    contenido = []
+
+    titulo = Paragraph("<b>Comprobante de Gasto</b>", estilos["Title"])
+    contenido.append(titulo)
+
+    data = [
+        ["Campo", "Detalle"],
+        ["Fecha", fecha],
+        ["Categoría", categoria],
+        ["Monto del gasto", f"${monto:.2f}"],
+        ["Saldo antes del gasto", f"${saldo_antes:.2f}"],
+        ["Saldo después del gasto", f"${saldo_despues:.2f}"],
+    ]
+
+    tabla = Table(data, colWidths=[180, 300])
+    tabla.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+    ]))
+
+    contenido.append(tabla)
+    doc.build(contenido)
+
+    return nombre_pdf
+
+
+# ------------------------------------------------------------
+# Pantalla principal – Registrar gastos
+# ------------------------------------------------------------
+def gastos_grupo():
+
+    st.header("💸 Registrar gastos del grupo")
+
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
 
-    # Buscar reunión existente
-    cursor.execute("""
-        SELECT id_caja
-        FROM caja_reunion
-        WHERE fecha = %s
-    """, (fecha,))
-    reunion = cursor.fetchone()
+    # --------------------------------------------------------
+    # FECHA DEL GASTO
+    # --------------------------------------------------------
+    fecha_raw = st.date_input("Fecha del gasto", date.today())
+    fecha = fecha_raw.strftime("%Y-%m-%d")
 
-    if reunion:
-        return reunion["id_caja"]
+    # --------------------------------------------------------
+    # CATEGORÍA DEL GASTO
+    # --------------------------------------------------------
+    categoria = st.text_input("Categoría del gasto (Ej: Transporte, Materiales, Servicios)").strip()
 
-    # Obtener saldo real actual
-    cursor.execute("SELECT saldo_actual FROM caja_general WHERE id = 1")
-    row = cursor.fetchone()
-    saldo_real = Decimal(str(row["saldo_actual"])) if row else Decimal("0.00")
+    # --------------------------------------------------------
+    # MONTO DEL GASTO
+    # --------------------------------------------------------
+    monto_raw = st.number_input(
+        "Monto del gasto ($)",
+        min_value=0.01,
+        format="%.2f",
+        step=0.01
+    )
+    monto = Decimal(str(monto_raw))
 
-    # Crear reunión con saldo inicial real
-    cursor.execute("""
-        INSERT INTO caja_reunion (fecha, saldo_inicial, ingresos, egresos, saldo_final)
-        VALUES (%s, %s, 0, 0, %s)
-    """, (fecha, saldo_real, saldo_real))
-    con.commit()
+    # --------------------------------------------------------
+    # OBTENER SALDO REAL (caja_general)
+    # --------------------------------------------------------
+    saldo_real = obtener_saldo_actual()
+    st.info(f"📌 Saldo disponible (caja actual): **${saldo_real:,.2f}**")
 
-    return cursor.lastrowid
+    # --------------------------------------------------------
+    # VALIDACIÓN
+    # --------------------------------------------------------
+    if monto > saldo_real:
+        st.error(f"❌ No puedes registrar un gasto mayor al saldo disponible (${saldo_real:,.2f}).")
+        return
 
+    # --------------------------------------------------------
+    # OBTENER O CREAR REUNIÓN (solo para reportes)
+    # --------------------------------------------------------
+    id_reunion = obtener_o_crear_reunion(fecha)
 
+    # --------------------------------------------------------
+    # BOTÓN PARA GUARDAR EL GASTO
+    # --------------------------------------------------------
+    if st.button("💾 Registrar gasto"):
 
-# ================================================================
-# 🟢 2. OBTENER SALDO REAL (caja única)
-# ================================================================
-def obtener_saldo_actual():
-    con = obtener_conexion()
-    cursor = con.cursor(dictionary=True)
+        try:
+            # Registrar movimiento (tipo Egreso)
+            registrar_movimiento(
+                id_caja=id_reunion,
+                tipo="Egreso",
+                categoria=categoria,
+                monto=monto
+            )
 
-    cursor.execute("SELECT saldo_actual FROM caja_general WHERE id = 1")
-    row = cursor.fetchone()
+            # Obtener nuevo saldo actual
+            saldo_despues = obtener_saldo_actual()
 
-    if not row:
-        return Decimal("0.00")
+            # Generar PDF
+            pdf_path = generar_pdf_gasto(
+                fecha,
+                categoria,
+                float(monto),
+                float(saldo_real),
+                float(saldo_despues)
+            )
 
-    return Decimal(str(row["saldo_actual"]))
+            st.success("✅ Gasto registrado correctamente.")
 
+            st.download_button(
+                "📄 Descargar comprobante PDF",
+                data=open(pdf_path, "rb").read(),
+                file_name=pdf_path,
+                mime="application/pdf"
+            )
 
+        except Exception as e:
+            st.error("❌ Error al registrar el gasto.")
+            st.write(str(e))
 
-# ================================================================
-# 🟢 3. REGISTRAR MOVIMIENTO (Ingreso/Egreso funcionando)
-# ================================================================
-def registrar_movimiento(id_caja, tipo, categoria, monto):
-    con = obtener_conexion()
-    cursor = con.cursor(dictionary=True)
-
-    monto = Decimal(str(monto))
-
-    # ---------------------------------------------------------------
-    # Registrar movimiento histórico
-    # ---------------------------------------------------------------
-    cursor.execute("""
-        INSERT INTO caja_movimientos (id_caja, tipo, categoria, monto)
-        VALUES (%s, %s, %s, %s)
-    """, (id_caja, tipo, categoria, monto))
-
-    # ---------------------------------------------------------------
-    # Actualizar SALDO REAL (CAJA GENERAL)
-    # ---------------------------------------------------------------
-    cursor.execute("SELECT saldo_actual FROM caja_general WHERE id = 1")
-    row = cursor.fetchone()
-    saldo = Decimal(str(row["saldo_actual"]))
-
-    if tipo == "Ingreso":
-        saldo += monto
-    else:
-        saldo -= monto
-
-    cursor.execute("""
-        UPDATE caja_general
-        SET saldo_actual = %s
-        WHERE id = 1
-    """, (saldo,))
-
-    # ---------------------------------------------------------------
-    # Actualizar reporte de reunión (ACUMULA correctamente)
-    # ---------------------------------------------------------------
-    if tipo == "Ingreso":
-        cursor.execute("""
-            UPDATE caja_reunion
-            SET ingresos = ingresos + %s,
-                saldo_final = saldo_final + %s
-            WHERE id_caja = %s
-        """, (monto, monto, id_caja))
-    else:
-        cursor.execute("""
-            UPDATE caja_reunion
-            SET egresos = egresos + %s,
-                saldo_final = saldo_final - %s
-            WHERE id_caja = %s
-        """, (monto, monto, id_caja))
-
-    con.commit()
-
-
-
-# ================================================================
-# 🟢 4. OBTENER REPORTE POR REUNIÓN
-# ================================================================
-def obtener_reporte_reunion(fecha):
-    """
-    Devuelve:
-    - ingresos del día
-    - egresos del día
-    - balance del día
-    - saldo final de esa reunión
-    """
-    con = obtener_conexion()
-    cursor = con.cursor(dictionary=True)
-
-    cursor.execute("""
-        SELECT ingresos, egresos, saldo_final
-        FROM caja_reunion
-        WHERE fecha = %s
-    """, (fecha,))
-    row = cursor.fetchone()
-
-    if not row:
-        return {
-            "ingresos": Decimal("0.00"),
-            "egresos": Decimal("0.00"),
-            "balance": Decimal("0.00"),
-            "saldo_final": Decimal("0.00"),
-        }
-
-    ingresos = Decimal(str(row["ingresos"]))
-    egresos = Decimal(str(row["egresos"]))
-    balance = ingresos - egresos
-    saldo_final = Decimal(str(row["saldo_final"]))
-
-    return {
-        "ingresos": ingresos,
-        "egresos": egresos,
-        "balance": balance,
-        "saldo_final": saldo_final,
-    }
-
-
-
-# ================================================================
-# 🟢 5. OBTENER MOVIMIENTOS POR FECHA
-# ================================================================
-def obtener_movimientos_por_fecha(fecha):
-    con = obtener_conexion()
-    cursor = con.cursor(dictionary=True)
-
-    cursor.execute("""
-        SELECT tipo, categoria, monto
-        FROM caja_movimientos cm
-        JOIN caja_reunion cr
-            ON cm.id_caja = cr.id_caja
-        WHERE cr.fecha = %s
-    """, (fecha,))
-
-    return cursor.fetchall()
+    cursor.close()
+    con.close()
