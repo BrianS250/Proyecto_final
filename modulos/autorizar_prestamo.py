@@ -22,8 +22,8 @@ def autorizar_prestamo():
         st.error("⚠ No existen reglas internas registradas.")
         return
 
-    prestamo_maximo = float(reglas.get("prestamo_maximo", 0))      # debe ser 100 en reglas
-    interes_por_10 = float(reglas.get("interes_por_10", 6))        # interés fijo 6%
+    prestamo_maximo = float(reglas.get("prestamo_maximo", 0))
+    interes_por_10 = float(reglas.get("interes_por_10", 6))
     plazo_maximo = int(reglas.get("plazo_maximo", 12))
 
     # ============================================================
@@ -74,7 +74,7 @@ def autorizar_prestamo():
         limite_real = float(min(ahorro_total, Decimal(prestamo_maximo)))
 
         # ============================================================
-        # Monto prestado — BLOQUEO TOTAL
+        # Monto prestado — BLOQUEO TOTAL SIN LETRAS
         # ============================================================
         monto_str = st.text_input(
             "💵 Monto prestado ($):",
@@ -82,21 +82,20 @@ def autorizar_prestamo():
             placeholder=f"Máximo permitido: ${limite_real}"
         )
 
-        # Bloquear letras y símbolos
+        # Bloquea letras y símbolos
         if monto_str and not monto_str.isdigit():
             st.error("❌ Solo se permiten números.")
-            st.stop()
+            return
 
         monto = float(monto_str) if monto_str else 0.0
 
-        # No permitir exceder el máximo real
+        # No exceder el límite permitido
         if monto > limite_real:
-        st.error(f"❌ El monto máximo permitido es: ${limite_real}.")
-        return
-
+            st.error(f"❌ El monto máximo permitido es: ${limite_real}.")
+            return
 
         # ============================================================
-        # Interés FIJO según reglas internas (6%) — NO EDITABLE
+        # Interés fijo (6%) — NO EDITABLE
         # ============================================================
         tasa = st.number_input(
             "📈 Interés (%)",
@@ -106,9 +105,6 @@ def autorizar_prestamo():
             disabled=True
         )
 
-        # ============================================================
-        # Plazo y cuotas
-        # ============================================================
         plazo = st.number_input(
             "🗓 Plazo (meses):",
             min_value=1,
@@ -125,7 +121,7 @@ def autorizar_prestamo():
         enviar = st.form_submit_button("✅ Autorizar préstamo")
 
     # ============================================================
-    # DETENER SI NO ENVÍA
+    # SI AÚN NO ENVÍA, DETENER
     # ============================================================
     if not enviar:
         return
