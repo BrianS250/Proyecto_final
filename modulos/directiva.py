@@ -102,8 +102,10 @@ def interfaz_directiva():
 
     elif menu == "Cierre de ciclo":
         cierre_ciclo()
+
+
 # ============================================================
-# 🎯 REGISTRO DE ASISTENCIA
+# 🎯 REGISTRO DE ASISTENCIA — ***MEJORADO SIN ROMPER NADA***
 # ============================================================
 def pagina_asistencia():
 
@@ -148,7 +150,7 @@ def pagina_asistencia():
     if st.button("💾 Guardar asistencia"):
         for id_socia, estado in estados.items():
 
-            # ¿Ya existe registro de asistencia para hoy?
+            # ¿Ya existe registro?
             cur.execute("""
                 SELECT Id_Asistencia
                 FROM Asistencia
@@ -158,7 +160,6 @@ def pagina_asistencia():
             existe = cur.fetchone()
 
             if existe:
-                # Actualizar
                 cur.execute("""
                     UPDATE Asistencia
                     SET Estado_asistencia=%s
@@ -166,7 +167,6 @@ def pagina_asistencia():
                 """, (estado, existe["Id_Asistencia"]))
 
             else:
-                # Insertar nuevo
                 cur.execute("""
                     INSERT INTO Asistencia(Id_Socia,Fecha,Estado_asistencia,Id_Reunion)
                     VALUES(%s,%s,%s,%s)
@@ -175,6 +175,53 @@ def pagina_asistencia():
         con.commit()
         st.success("Asistencia guardada correctamente.")
         st.rerun()
+
+    # -------------------------------------------
+    # Mostrar TOT ALES DE ASISTENCIA
+    # -------------------------------------------
+    cur.execute("""
+        SELECT Estado_asistencia
+        FROM Asistencia
+        WHERE Fecha = %s
+    """, (fecha,))
+    registros_tot = cur.fetchall()
+
+    if registros_tot:
+        total_socias = len(registros_tot)
+        presentes = sum(1 for r in registros_tot if r["Estado_asistencia"] == "Presente")
+        ausentes = total_socias - presentes
+
+        st.subheader("📊 Resumen de asistencia")
+        st.info(
+            f"👩‍🦰 Total socias: **{total_socias}**\n"
+            f"🟢 Presentes: **{presentes}**\n"
+            f"🔴 Ausentes: **{ausentes}**"
+        )
+
+    st.markdown("---")
+
+    # ----------------------------------------------------------
+    # ⭐ INGRESOS EXTRAORDINARIOS
+    # ----------------------------------------------------------
+    st.subheader("💵 Registrar ingreso extraordinario (rifas, donaciones, etc.)")
+
+    concepto = st.text_input("Concepto del ingreso:")
+    monto = st.number_input("Monto ($)", min_value=0.01, step=0.25)
+
+    if st.button("➕ Registrar ingreso extraordinario"):
+
+        if concepto.strip() == "":
+            st.warning("Debe ingresar un concepto.")
+        else:
+            registrar_movimiento(
+                id_caja=id_caja,
+                tipo="Ingreso",
+                categoria=f"Ingreso extraordinario — {concepto}",
+                monto=monto
+            )
+
+            st.success("Ingreso extraordinario registrado y agregado a caja.")
+            st.rerun()
 
     # -------------------------------------------
     # Mostrar registro guardado
@@ -190,6 +237,8 @@ def pagina_asistencia():
     if registros:
         df = pd.DataFrame(registros)
         st.dataframe(df, use_container_width=True)
+
+
 # ============================================================
 # 👩‍🦰 REGISTRAR NUEVAS SOCIAS
 # ============================================================
@@ -200,9 +249,6 @@ def pagina_registro_socias():
     con = obtener_conexion()
     cur = con.cursor(dictionary=True)
 
-    # -------------------------------------------
-    # Formulario para registrar socia
-    # -------------------------------------------
     nombre = st.text_input("Nombre completo de la socia:")
 
     if st.button("Registrar socia"):
@@ -219,9 +265,6 @@ def pagina_registro_socias():
         st.success(f"Socia '{nombre}' registrada correctamente.")
         st.rerun()
 
-    # -------------------------------------------
-    # Mostrar listado de socias
-    # -------------------------------------------
     cur.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     data = cur.fetchall()
 
@@ -229,6 +272,8 @@ def pagina_registro_socias():
         df = pd.DataFrame(data)
         st.subheader("📋 Lista de socias")
         st.dataframe(df, use_container_width=True)
+
+
 # ============================================================
 # ⚠️ APLICACIÓN DE MULTAS
 # ============================================================
@@ -250,7 +295,7 @@ def pagina_multas():
     id_socia = dict_socias[socia_sel]
 
     # ----------------------------------------------------------
-    # TIPOS DE MULTA (TABLA REAL: tipo_de_multa)
+    # TIPOS DE MULTA
     # ----------------------------------------------------------
     cur.execute("SELECT Id_Tipo_multa, Tipo_de_multa FROM tipo_de_multa")
     tipos = cur.fetchall()
@@ -335,24 +380,19 @@ def pagina_multas():
 
         col6.write(str(m["Fecha_aplicacion"]))
 
-               # ------------------------------------------------------
-        # BOTÓN ACTUALIZAR MULTA
-        # ------------------------------------------------------
         if col7.button("Actualizar", key=f"u_{m['Id_Multa']}"):
 
             estado_anterior = m["Estado"]
 
-            # SI PASA DE "A pagar" A "Pagada" → SUMA A CAJA
+            # SI pasa de A pagar → Pagada → suma a caja
             if estado_anterior == "A pagar" and nuevo_estado == "Pagada":
 
-                # OBTENER caja de la fecha de la multa
                 cur.execute("SELECT id_caja FROM caja_reunion WHERE fecha = %s", (m["Fecha_aplicacion"],))
                 reunion = cur.fetchone()
 
                 if reunion:
                     id_caja = reunion["id_caja"]
 
-                    # REGISTRAR MOVIMIENTO DE INGRESO
                     registrar_movimiento(
                         id_caja=id_caja,
                         tipo="Ingreso",
@@ -360,7 +400,6 @@ def pagina_multas():
                         monto=float(m["Monto"])
                     )
 
-            # ACTUALIZAR ESTADO DE MULTA
             cur.execute("""
                 UPDATE Multa
                 SET Estado = %s
@@ -371,21 +410,7 @@ def pagina_multas():
             st.success("Multa actualizada correctamente.")
             st.rerun()
 
+
 # ============================================================
 # FIN DEL MÓDULO DIRECTIVA
 # ============================================================
-
-# No se requieren funciones auxiliares adicionales.
-# Todas las funciones:
-# - interfaz_directiva()
-# - pagina_asistencia()
-# - pagina_registro_socias()
-# - pagina_multas()
-# están integradas y funcionales.
-
-# Nota importante:
-# registrar_movimiento(), gestionar_reglas(), cierre_ciclo(),
-# reporte_caja(), gastos_grupo(), autorizar_prestamo(),
-# pago_prestamo(), ahorro()
-# se importan desde sus módulos correspondientes.
-
