@@ -208,7 +208,7 @@ def pagina_asistencia():
 
 
 # ============================================================
-# REGISTRO DE NUEVAS SOCIAS — VALIDACIÓN PERFECTA
+# REGISTRO DE NUEVAS SOCIAS — FINAL SIN ERRORES
 # ============================================================
 def pagina_registro_socias():
 
@@ -217,88 +217,76 @@ def pagina_registro_socias():
     con = obtener_conexion()
     cur = con.cursor(dictionary=True)
 
-    # ------------------------------
-    # CAMPOS EN EL ORDEN CORRECTO
-    # ------------------------------
-
-    # 1. Nombre
+    # -------------------------
+    # 🔹 Campo de NOMBRE
+    # -------------------------
     nombre = st.text_input("Nombre completo de la socia:")
 
-    # 2. DUI (solo números, máximo 9)
-    dui = st.text_input(
-        "Número de DUI (9 dígitos):",
-        max_chars=9
-    )
+    # -------------------------
+    # 🔹 DUI (solo números, máx 9)
+    # -------------------------
+    dui_input = st.text_input("Número de DUI (9 dígitos):", key="dui")
 
-    # Forzar solo números y no más de 9
-    dui = "".join([c for c in dui if c.isdigit()])[:9]
+    # Filtrar todo lo que NO sea número
+    dui_filtrado = "".join([c for c in dui_input if c.isdigit()])
 
-    # Refrescar en pantalla
-    st.session_state["dui_fixed"] = dui
-    dui = st.session_state["dui_fixed"]
+    # Limitar a 9 dígitos
+    dui_filtrado = dui_filtrado[:9]
 
-    # Mostrar caja corregida
-    st.text_input(
-        "Corrección automática del DUI:",
-        value=dui,
-        disabled=True
-    )
+    # Mostrar el valor filtrado sin crear campo nuevo
+    if dui_input != dui_filtrado:
+        st.session_state["dui"] = dui_filtrado
+        st.experimental_rerun()
 
-    # 3. Teléfono (solo números, máximo 8)
-    telefono = st.text_input(
-        "Número de teléfono (8 dígitos):",
-        max_chars=8
-    )
+    # -------------------------
+    # 🔹 Teléfono (solo números, máx 8)
+    # -------------------------
+    tel_input = st.text_input("Número de teléfono (8 dígitos):", key="tel")
 
-    # Forzar solo números
-    telefono = "".join([c for c in telefono if c.isdigit()])[:8]
+    tel_filtrado = "".join([c for c in tel_input if c.isdigit()])
+    tel_filtrado = tel_filtrado[:8]
 
-    st.session_state["tel_fixed"] = telefono
-    telefono = st.session_state["tel_fixed"]
+    if tel_input != tel_filtrado:
+        st.session_state["tel"] = tel_filtrado
+        st.experimental_rerun()
 
-    st.text_input(
-        "Corrección automática del teléfono:",
-        value=telefono,
-        disabled=True
-    )
-
-    # ------------------------------
-    # BOTÓN REGISTRAR
-    # ------------------------------
+    # -------------------------
+    # 🔹 Botón registrar
+    # -------------------------
     if st.button("Registrar socia"):
 
-        # Validaciones finales
         if nombre.strip() == "":
             st.warning("Debe ingresar un nombre.")
             return
 
-        if len(dui) != 9:
+        if len(dui_filtrado) != 9:
             st.warning("El DUI debe contener exactamente 9 dígitos.")
             return
 
-        if len(telefono) != 8:
+        if len(tel_filtrado) != 8:
             st.warning("El teléfono debe contener exactamente 8 dígitos.")
             return
 
-        # Insertar
         cur.execute("""
-            INSERT INTO Socia(Nombre, DUI, Telefono)
-            VALUES(%s, %s, %s)
-        """, (nombre, dui, telefono))
+            INSERT INTO Socia (Nombre, DUI, Telefono)
+            VALUES (%s, %s, %s)
+        """, (nombre, dui_filtrado, tel_filtrado))
         con.commit()
 
         st.success(f"Socia '{nombre}' registrada correctamente.")
         st.rerun()
 
-    # ------------------------------
-    # LISTA DE SOCIAS
-    # ------------------------------
+    # -------------------------
+    # 🔹 Tabla de socias
+    # -------------------------
     cur.execute("SELECT Id_Socia, Nombre, DUI FROM Socia ORDER BY Id_Socia ASC")
     data = cur.fetchall()
 
     if data:
+        df = pd.DataFrame(data)
         st.subheader("📋 Lista de socias")
-        st.dataframe(pd.DataFrame(data), use_container_width=True)
+        st.dataframe(df, use_container_width=True)
+
 
 
 
