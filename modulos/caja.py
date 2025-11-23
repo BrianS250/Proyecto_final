@@ -5,12 +5,12 @@ from modulos.conexion import obtener_conexion
 
 
 # ================================================================
-# 🟢 1. OBTENER O CREAR REUNIÓN (solo para REPORTES)
+# 🟢 1. OBTENER O CREAR REUNIÓN (correctamente integrado a caja real)
 # ================================================================
 def obtener_o_crear_reunion(fecha):
     """
     Crea o recupera una reunión por fecha.
-    YA NO MANEJA SALDO REAL, solo sirve para reportes diarios.
+    Ahora sí toma el saldo real para actualizar correctamente ingresos.
     """
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
@@ -26,11 +26,16 @@ def obtener_o_crear_reunion(fecha):
     if reunion:
         return reunion["id_caja"]
 
-    # Crear una reunión solo para efectos de reporte
+    # Obtener saldo real actual
+    cursor.execute("SELECT saldo_actual FROM caja_general WHERE id = 1")
+    row = cursor.fetchone()
+    saldo_real = Decimal(str(row["saldo_actual"])) if row else Decimal("0.00")
+
+    # Crear reunión con saldo inicial real
     cursor.execute("""
         INSERT INTO caja_reunion (fecha, saldo_inicial, ingresos, egresos, saldo_final)
-        VALUES (%s, 0, 0, 0, 0)
-    """, (fecha,))
+        VALUES (%s, %s, 0, 0, %s)
+    """, (fecha, saldo_real, saldo_real))
     con.commit()
 
     return cursor.lastrowid
@@ -55,9 +60,7 @@ def obtener_saldo_actual():
 
 
 # ================================================================
-# 🟢 3. REGISTRAR MOVIMIENTO
-#     - Actualiza caja única acumulada
-#     - Registra reporte por reunión
+# 🟢 3. REGISTRAR MOVIMIENTO (Ingreso/Egreso funcionando)
 # ================================================================
 def registrar_movimiento(id_caja, tipo, categoria, monto):
     con = obtener_conexion()
@@ -66,7 +69,7 @@ def registrar_movimiento(id_caja, tipo, categoria, monto):
     monto = Decimal(str(monto))
 
     # ---------------------------------------------------------------
-    # ✔ Registrar movimiento histórico
+    # Registrar movimiento histórico
     # ---------------------------------------------------------------
     cursor.execute("""
         INSERT INTO caja_movimientos (id_caja, tipo, categoria, monto)
@@ -74,7 +77,7 @@ def registrar_movimiento(id_caja, tipo, categoria, monto):
     """, (id_caja, tipo, categoria, monto))
 
     # ---------------------------------------------------------------
-    # ✔ Actualizar SALDO REAL (CAJA GENERAL)
+    # Actualizar SALDO REAL (CAJA GENERAL)
     # ---------------------------------------------------------------
     cursor.execute("SELECT saldo_actual FROM caja_general WHERE id = 1")
     row = cursor.fetchone()
@@ -92,7 +95,7 @@ def registrar_movimiento(id_caja, tipo, categoria, monto):
     """, (saldo,))
 
     # ---------------------------------------------------------------
-    # ✔ Actualizar reporte de reunión
+    # Actualizar reporte de reunión (ACUMULA correctamente)
     # ---------------------------------------------------------------
     if tipo == "Ingreso":
         cursor.execute("""
