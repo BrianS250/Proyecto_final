@@ -223,54 +223,46 @@ def pagina_registro_socias():
     nombre = st.text_input("Nombre completo de la socia:")
 
     # ---------------------------
-    # CAMPO DUI (solo números)
+    # DUI SOLO NÚMEROS (9)
     # ---------------------------
-    dui = st.text_input(
+    if "dui" not in st.session_state:
+        st.session_state.dui = ""
+
+    dui_input = st.text_input(
         "Número de DUI (9 dígitos):",
+        st.session_state.dui,
         max_chars=9,
-        placeholder="Solo números",
-        key="dui"
+        key="dui_text"
     )
 
-    # BLOQUEO REAL DE LETRAS — DUI
-    st.html("""
-    <script>
-    const labels = window.parent.document.querySelectorAll('label');
-    labels.forEach(label => {
-        if (label.innerText.includes("Número de DUI")) {
-            const input = label.parentElement.querySelector('input');
-            input.addEventListener('input', function() {
-                this.value = this.value.replace(/[^0-9]/g, '');
-            });
-        }
-    });
-    </script>
-    """)
+    # LIMPIAR LETRAS Y LIMITAR A 9
+    cleaned_dui = "".join([c for c in dui_input if c.isdigit()])[:9]
+    if cleaned_dui != st.session_state.dui:
+        st.session_state.dui = cleaned_dui
+        st.rerun()
+
+    dui = st.session_state.dui
 
     # ---------------------------
-    # CAMPO TELÉFONO (solo números)
+    # TELÉFONO SOLO NÚMEROS (8)
     # ---------------------------
-    telefono = st.text_input(
+    if "telefono" not in st.session_state:
+        st.session_state.telefono = ""
+
+    tel_input = st.text_input(
         "Número de teléfono (8 dígitos):",
+        st.session_state.telefono,
         max_chars=8,
-        placeholder="Solo números",
-        key="tel"
+        key="tel_text"
     )
 
-    # BLOQUEO REAL DE LETRAS — TELÉFONO
-    st.html("""
-    <script>
-    const labels2 = window.parent.document.querySelectorAll('label');
-    labels2.forEach(label => {
-        if (label.innerText.includes("Número de teléfono")) {
-            const input = label.parentElement.querySelector('input');
-            input.addEventListener('input', function() {
-                this.value = this.value.replace(/[^0-9]/g, '');
-            });
-        }
-    });
-    </script>
-    """)
+    # LIMPIAR LETRAS Y LIMITAR A 8
+    cleaned_tel = "".join([c for c in tel_input if c.isdigit()])[:8]
+    if cleaned_tel != st.session_state.telefono:
+        st.session_state.telefono = cleaned_tel
+        st.rerun()
+
+    telefono = st.session_state.telefono
 
     # ---------------------------
     # BOTÓN DE REGISTRO
@@ -308,7 +300,6 @@ def pagina_registro_socias():
         df = pd.DataFrame(data)
         st.subheader("📋 Lista de socias")
         st.dataframe(df, use_container_width=True)
-
 
 
 
