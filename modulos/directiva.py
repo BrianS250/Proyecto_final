@@ -21,6 +21,8 @@ from modulos.cierre_ciclo import cierre_ciclo
 
 # REGLAS INTERNAS
 from modulos.reglas import gestionar_reglas
+from modulos.reglas_utils import obtener_reglas
+
 
 
 # ============================================================
@@ -122,106 +124,191 @@ def interfaz_directiva():
     elif menu == "Cierre de ciclo":
         cierre_ciclo()
     elif menu == "Reporte de caja":
-        reporte_caja()
+    reporte_caja()
+
+    # ============================================================
+    # 🔵 RESUMEN DEL CICLO (Conectado a Reglas Internas)
+    # ============================================================
+    from modulos.reglas_utils import obtener_reglas
+    from modulos.conexion import obtener_conexion
+
+    reglas = obtener_reglas()
+
+    if reglas:
+        fecha_inicio_ciclo = reglas.get("fecha_inicio_ciclo", None)
+
+        if fecha_inicio_ciclo:
+
+            st.markdown("---")
+            st.subheader("📊 Resumen del ciclo (desde fecha definida en reglas)")
+
+            con = obtener_conexion()
+            cur = con.cursor(dictionary=True)
+
+            cur.execute("""
+                SELECT 
+                    IFNULL(SUM(ingresos),0) AS total_ingresos,
+                    IFNULL(SUM(egresos),0) AS total_egresos
+                FROM caja_reunion
+                WHERE fecha >= %s
+            """, (fecha_inicio_ciclo,))
+
+            tot = cur.fetchone()
+
+            total_ingresos_ciclo = float(tot["total_ingresos"])
+            total_egresos_ciclo = float(tot["total_egresos"])
+            balance = total_ingresos_ciclo - total_egresos_ciclo
+
+            st.write(f"📥 **Ingresos acumulados:** ${total_ingresos_ciclo:.2f}")
+            st.write(f"📤 **Egresos acumulados:** ${total_egresos_ciclo:.2f}")
+            st.write(f"💼 **Balance del ciclo:** ${balance:.2f}")
+
+            cur.close()
+            con.close()
+        else:
+            st.info("⚠ No está definida la fecha de inicio del ciclo en Reglas Internas.")
+    else:
+        st.info("⚠ Debes registrar reglas internas primero.")
+
     elif menu == "Reglas internas":
         gestionar_reglas()
 
 
 
 # ============================================================
-# MULTAS — REGISTRO + FILTROS + PENDIENTES
+# MULTAS — TOTALMENTE CONECTADAS A REGLAS INTERNAS (FINAL)
 # ============================================================
 def pagina_multas():
 
     st.header("⚠️ Aplicación de multas")
 
+    # ---------------------------------------------
+    # LEER REGLAS INTERNAS
+    # ---------------------------------------------
+    from modulos.reglas_utils import obtener_reglas
+    reglas = obtener_reglas()
+
+    if not reglas:
+        st.error("⚠ Debe registrar reglas internas primero.")
+        return
+
+    multa_inasistencia = float(reglas.get("multa_inasistencia", 0))
+    multa_mora = float(reglas.get("multa_mora", 0))
+
+    # ---------------------------------------------
+    # CONEXIÓN A BD
+    # ---------------------------------------------
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
 
+    # ---------------------------------------------
     # SOCIAS
+    # ---------------------------------------------
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
-
     opciones_socias = {f"{s['Id_Socia']} - {s['Nombre']}": s["Id_Socia"] for s in socias}
 
-    # TIPOS DE MULTA
-    cursor.execute("SELECT Id_Tipo_multa, `Tipo de multa` FROM `Tipo de multa` ORDER BY Id_Tipo_multa ASC")
-    tipos = cursor.fetchall()
+    # ---------------------------------------------
+    # TIPO DE MULTA
+    # ---------------------------------------------
+    tipo_sel = st.selectbox(
+        "Tipo de multa:",
+        ["Inasistencia", "Mora préstamo", "Otra"]
+    )
 
-    opciones_tipos = {t["Tipo de multa"]: t["Id_Tipo_multa"] for t in tipos}
+    # Monto automático desde reglas
+    if tipo_sel == "Inasistencia":
+        monto_default = multa_inasistencia
+        editable = False
+    elif tipo_sel == "Mora préstamo":
+        monto_default = multa_mora
+        editable = False
+    else:
+        monto_default = 0.25
+        editable = True
 
-    # --------------------------
-    # REGISTRO DE MULTA
-    # --------------------------
+    # ---------------------------------------------
+    # FORMULARIO DE NUEVA MULTA
+    # ---------------------------------------------
     st.subheader("➕ Registrar nueva multa")
 
-    socia_sel = st.selectbox("Socia:", opciones_socias.keys())
+    socia_sel = st.selectbox("👩 Socia:", opciones_socias.keys())
     id_socia = opciones_socias[socia_sel]
 
-    tipo_sel = st.selectbox("Tipo de multa:", opciones_tipos.keys())
-    id_tipo = opciones_tipos[tipo_sel]
+    fecha = st.date_input("📅 Fecha", date.today()).strftime("%Y-%m-%d")
 
-    monto = st.number_input("Monto ($)", min_value=0.25, step=0.25)
-    fecha = st.date_input("Fecha", date.today()).strftime("%Y-%m-%d")
+    monto = st.number_input(
+        "Monto ($)",
+        min_value=0.25,
+        step=0.25,
+        value=monto_default,
+        disabled=not editable
+    )
+
     estado_sel = st.selectbox("Estado:", ["A pagar", "Pagada"])
 
+    # ---------------------------------------------
+    # VALIDACIÓN PERMISO
+    # NO aplicar multa si tiene permiso
+    # ---------------------------------------------
+    cursor.execute("""
+        SELECT Estado_asistencia
+        FROM Asistencia
+        WHERE Id_Socia=%s AND Fecha=%s
+        LIMIT 1
+    """, (id_socia, fecha))
+    row_asistencia = cursor.fetchone()
+
+    if row_asistencia and row_asistencia["Estado_asistencia"] == "Permiso":
+        st.warning("🔒 La socia tenía PERMISO. No se puede aplicar multa.")
+        return
+
+    # ---------------------------------------------
+    # GUARDAR MULTA
+    # ---------------------------------------------
     if st.button("💾 Registrar multa"):
+
         cursor.execute("""
             INSERT INTO Multa(Monto, Fecha_aplicacion, Estado, Id_Tipo_multa, Id_Socia)
-            VALUES (%s,%s,%s,%s,%s)
-        """, (monto, fecha, estado_sel, id_tipo, id_socia))
+            VALUES (%s, %s, %s, NULL, %s)
+        """, (monto, fecha, estado_sel, id_socia))
+
         con.commit()
         st.success("✔ Multa registrada correctamente.")
         st.rerun()
 
     st.markdown("---")
 
-    # --------------------------
+    # ---------------------------------------------
     # FILTROS
-    # --------------------------
+    # ---------------------------------------------
     st.subheader("🔎 Filtrar multas")
 
-    fecha_filtro = st.date_input("Fecha (opcional)", value=None)
+    fecha_filtro = st.date_input("Fecha (opcional):", value=None)
     fecha_sql = fecha_filtro.strftime("%Y-%m-%d") if fecha_filtro else None
 
-    opciones_socias_f = {"Todas": None}
-    for s in socias:
-        opciones_socias_f[f"{s['Id_Socia']} - {s['Nombre']}"] = s["Id_Socia"]
-
-    socia_f = st.selectbox("Filtrar por socia:", list(opciones_socias_f.keys()))
-    id_socia_f = opciones_socias_f[socia_f]
-
-    opciones_tipo_f = {"Todos": None}
-    for t in tipos:
-        opciones_tipo_f[t["Tipo de multa"]] = t["Id_Tipo_multa"]
-
-    tipo_f = st.selectbox("Filtrar por tipo:", opciones_tipo_f.keys())
-    tipo_id_f = opciones_tipo_f[tipo_f]
+    socia_f = st.selectbox("Filtrar por socia:", ["Todas"] + list(opciones_socias.keys()))
+    id_socia_f = None if socia_f == "Todas" else opciones_socias[socia_f]
 
     estado_f = st.selectbox("Estado:", ["Todos", "A pagar", "Pagada"])
 
+    # QUERY
     query = """
-        SELECT M.Id_Multa, S.Id_Socia, S.Nombre, T.`Tipo de multa` AS Tipo,
+        SELECT M.Id_Multa, S.Id_Socia, S.Nombre,
                M.Monto, M.Estado, M.Fecha_aplicacion
         FROM Multa M
         JOIN Socia S ON S.Id_Socia = M.Id_Socia
-        JOIN `Tipo de multa` T ON T.Id_Tipo_multa = M.Id_Tipo_multa
         WHERE 1=1
     """
-
     params = []
 
     if fecha_sql:
-        query += " AND M.Fecha_aplicacion=%s"
+        query += " AND Fecha_aplicacion=%s"
         params.append(fecha_sql)
 
     if id_socia_f:
         query += " AND M.Id_Socia=%s"
         params.append(id_socia_f)
-
-    if tipo_id_f:
-        query += " AND M.Id_Tipo_multa=%s"
-        params.append(tipo_id_f)
 
     if estado_f != "Todos":
         query += " AND M.Estado=%s"
@@ -232,27 +319,21 @@ def pagina_multas():
     cursor.execute(query, params)
     filtradas = cursor.fetchall()
 
-    st.subheader("📋 Resultados filtrados")
-    if filtradas:
-        st.dataframe(pd.DataFrame(filtradas), hide_index=True)
-    else:
-        st.info("No hay registros.")
+    st.dataframe(pd.DataFrame(filtradas), hide_index=True)
 
     st.markdown("---")
 
-    # --------------------------
+    # ---------------------------------------------
     # MULTAS PENDIENTES
-    # --------------------------
+    # ---------------------------------------------
     st.subheader("📌 Multas pendientes (A pagar)")
 
     cursor.execute("""
-        SELECT M.Id_Multa, S.Id_Socia, S.Nombre, T.`Tipo de multa` AS Tipo,
-               M.Monto, M.Fecha_aplicacion
+        SELECT M.Id_Multa, S.Nombre, M.Monto, M.Fecha_aplicacion
         FROM Multa M
         JOIN Socia S ON S.Id_Socia = M.Id_Socia
-        JOIN `Tipo de multa` T ON T.Id_Tipo_multa = M.Id_Tipo_multa
-        WHERE M.Estado='A pagar'
-        ORDER BY M.Id_Multa DESC
+        WHERE Estado='A pagar'
+        ORDER BY Id_Multa DESC
     """)
 
     pendientes = cursor.fetchall()
@@ -261,47 +342,71 @@ def pagina_multas():
         st.info("No hay multas pendientes.")
     else:
         for m in pendientes:
-            c1, c2, c3, c4, c5 = st.columns([1, 2, 2, 2, 3])
+            c1, c2, c3, c4 = st.columns([1, 2, 2, 2])
             c1.write(f"#{m['Id_Multa']}")
-            c2.write(f"{m['Id_Socia']} - {m['Nombre']}")
-            c3.write(m["Tipo"])
-            c4.write(f"${m['Monto']}")
+            c2.write(m["Nombre"])
+            c3.write(f"${m['Monto']}")
 
-            if c5.button("Pagar", key=f"pay_{m['Id_Multa']}"):
+            if c4.button("Pagar", key=f"pay_{m['Id_Multa']}"):
 
                 id_caja = obtener_o_crear_reunion(m["Fecha_aplicacion"])
 
                 registrar_movimiento(
-                    id_caja,
-                    "Ingreso",
-                    f"Pago de multa – {m['Nombre']}",
-                    float(m["Monto"])
+                    id_caja=id_caja,
+                    tipo="Ingreso",
+                    categoria=f"Pago multa {m['Nombre']}",
+                    monto=float(m["Monto"])
                 )
 
-                cursor.execute("UPDATE Multa SET Estado='Pagada' WHERE Id_Multa=%s", (m["Id_Multa"],))
+                cursor.execute("""
+                    UPDATE Multa
+                    SET Estado='Pagada'
+                    WHERE Id_Multa=%s
+                """, (m["Id_Multa"],))
+
                 con.commit()
-                st.success("✔ Multa pagada.")
+                st.success("✔ Pago registrado.")
                 st.rerun()
 
     cursor.close()
     con.close()
 
 
-
 # ============================================================
-# ASISTENCIA
+# ASISTENCIA — CONECTADA A REGLAS INTERNAS
 # ============================================================
 def pagina_asistencia():
 
+    from modulos.reglas_utils import obtener_reglas
+
     st.header("📝 Registro de asistencia")
 
+    # ---------------------------------------------
+    # LEER REGLAS INTERNAS
+    # ---------------------------------------------
+    reglas = obtener_reglas()
+
+    if not reglas:
+        st.error("⚠ No hay reglas internas registradas.")
+        return
+
+    multa_inasistencia = float(reglas["multa_inasistencia"])
+
+    # ---------------------------------------------
+    # CONEXIÓN
+    # ---------------------------------------------
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
 
-    fecha_raw = st.date_input("Fecha de reunión", date.today())
+    # ---------------------------------------------
+    # FECHA DE LA REUNIÓN
+    # ---------------------------------------------
+    fecha_raw = st.date_input("📅 Fecha de reunión", date.today())
     fecha = fecha_raw.strftime("%Y-%m-%d")
 
-    # Reunión
+    # ---------------------------------------------
+    # OBTENER O CREAR REUNIÓN
+    # ---------------------------------------------
     cursor.execute("SELECT Id_Reunion FROM Reunion WHERE Fecha_reunion=%s", (fecha,))
     row = cursor.fetchone()
 
@@ -316,7 +421,9 @@ def pagina_asistencia():
         id_reunion = cursor.lastrowid
         st.success(f"Reunión creada (ID {id_reunion}).")
 
-    # Socias
+    # ---------------------------------------------
+    # SOCIAS
+    # ---------------------------------------------
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
 
@@ -326,16 +433,39 @@ def pagina_asistencia():
     for s in socias:
         estado = st.selectbox(
             f"{s['Id_Socia']} - {s['Nombre']}",
-            ["SI", "NO"],
+            ["Presente", "Ausente", "Permiso"],
             key=f"asis_{s['Id_Socia']}"
         )
         registro[s["Id_Socia"]] = estado
 
-    # Guardar
+    # ---------------------------------------------
+    # GUARDAR ASISTENCIA
+    # ---------------------------------------------
     if st.button("💾 Guardar asistencia"):
-        for id_socia, valor in registro.items():
-            est = "Presente" if valor == "SI" else "Ausente"
 
+        for id_socia, estado in registro.items():
+
+            # -----------------------------------
+            # Determinar estado a guardar
+            # -----------------------------------
+            if estado == "Presente":
+                est = "Presente"
+
+            elif estado == "Permiso":
+                est = "Permiso"  # NO MULTA
+
+            else:  # Ausente
+                est = "Ausente"
+
+                # MULTA automática por inasistencia
+                cursor.execute("""
+                    INSERT INTO Multa(Monto, Fecha_aplicacion, Estado, Id_Tipo_multa, Id_Socia)
+                    VALUES (%s, %s, 'A pagar', 1, %s)
+                """, (multa_inasistencia, fecha, id_socia))
+
+            # -----------------------------------
+            # Insert/update en asistencia
+            # -----------------------------------
             cursor.execute("""
                 SELECT Id_Asistencia FROM Asistencia
                 WHERE Id_Reunion=%s AND Id_Socia=%s
@@ -356,8 +486,12 @@ def pagina_asistencia():
                 """, (id_reunion, id_socia, est, fecha))
 
         con.commit()
-        st.success("✔ Asistencia registrada.")
+        st.success("✔ Asistencia registrada correctamente (reglas aplicadas).")
+        st.rerun()
 
+    # ---------------------------------------------
+    # MOSTRAR ASISTENCIA DEL DÍA
+    # ---------------------------------------------
     cursor.execute("""
         SELECT S.Id_Socia, S.Nombre, A.Estado_asistencia
         FROM Asistencia A
@@ -365,66 +499,6 @@ def pagina_asistencia():
         WHERE A.Id_Reunion=%s
     """, (id_reunion,))
 
-    datos = cursor.fetchall()
-
-    if datos:
-        df = pd.DataFrame(datos)
-        st.dataframe(df, hide_index=True)
-
-    cursor.close()
-    con.close()
-
-
-
-# ============================================================
-# REGISTRO DE SOCIAS
-# ============================================================
-def pagina_registro_socias():
-
-    st.header("👩‍🦰 Registro de nuevas socias")
-
-    con = obtener_conexion()
-    cursor = con.cursor(dictionary=True)
-
-    nombre = st.text_input("Nombre completo")
-    dui_raw = st.text_input("DUI (9 dígitos, sin guion)", max_chars=9)
-
-    dui_formateado = ""
-    if dui_raw.isdigit() and len(dui_raw) == 9:
-        dui_formateado = f"{dui_raw[:8]}-{dui_raw[8]}"
-        st.success(f"Formato DUI: {dui_formateado}")
-    else:
-        st.info("Formato esperado: 00000000-0")
-
-    telefono_raw = st.text_input("Teléfono (8 dígitos)", max_chars=8)
-
-    if telefono_raw and not telefono_raw.isdigit():
-        st.error("El teléfono solo debe contener números.")
-
-    if st.button("Registrar socia"):
-
-        if nombre.strip() == "":
-            st.warning("Debe ingresar un nombre.")
-            return
-
-        if not (dui_raw.isdigit() and len(dui_raw) == 9):
-            st.error("DUI incorrecto.")
-            return
-
-        if not (telefono_raw.isdigit() and len(telefono_raw) == 8):
-            st.error("Teléfono incorrecto.")
-            return
-
-        cursor.execute("""
-            INSERT INTO Socia(Nombre, DUI, Telefono, Sexo)
-            VALUES(%s,%s,%s,'F')
-        """, (nombre, dui_formateado, telefono_raw))
-
-        con.commit()
-        st.success("✔ Socia registrada.")
-        st.rerun()
-
-    cursor.execute("SELECT Id_Socia, Nombre, DUI, Telefono FROM Socia ORDER BY Id_Socia ASC")
     datos = cursor.fetchall()
 
     if datos:
