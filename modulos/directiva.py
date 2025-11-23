@@ -208,7 +208,7 @@ def pagina_asistencia():
 
 
 # ============================================================
-# REGISTRO DE NUEVAS SOCIAS — DUI Y TELÉFONO SOLO NÚMEROS
+# REGISTRO DE NUEVAS SOCIAS — DUI/TEL SOLO NUMÉRICOS CONTROLADOS
 # ============================================================
 def pagina_registro_socias():
 
@@ -219,36 +219,23 @@ def pagina_registro_socias():
 
     nombre = st.text_input("Nombre completo de la socia:")
 
-    # -------------------------
-    # DUI — SOLO NÚMEROS (9)
-    # -------------------------
-    dui_raw = st.text_input("Número de DUI (9 dígitos):", key="dui_input")
+    # DUI CONTROLADO
+    dui_input = st.text_input("Número de DUI (9 dígitos):", max_chars=9)
+    # Filtrar solo números y limitar a 9
+    dui = "".join([c for c in dui_input if c.isdigit()])[:9]
 
-    # Filtrar solo números
-    dui = "".join([c for c in dui_raw if c.isdigit()])
+    # Mostrarlo corregido (si se modificó automáticamente)
+    if dui != dui_input:
+        st.warning("Solo se permiten números y máximo 9 dígitos en el DUI.")
 
-    # Limitar a 9 caracteres máximo
-    if len(dui) > 9:
-        dui = dui[:9]
+    # TELÉFONO CONTROLADO
+    tel_input = st.text_input("Número de teléfono (8 dígitos):", max_chars=8)
+    telefono = "".join([c for c in tel_input if c.isdigit()])[:8]
 
-    # Actualizar el campo visualmente
-    st.session_state["dui_input"] = dui
+    if telefono != tel_input:
+        st.warning("Solo se permiten números y máximo 8 dígitos en el teléfono.")
 
-    # -------------------------
-    # TELÉFONO — SOLO NÚMEROS (8)
-    # -------------------------
-    tel_raw = st.text_input("Número de teléfono (8 dígitos):", key="tel_input")
-
-    telefono = "".join([c for c in tel_raw if c.isdigit()])
-
-    if len(telefono) > 8:
-        telefono = telefono[:8]
-
-    st.session_state["tel_input"] = telefono
-
-    # -------------------------
-    # BOTÓN DE REGISTRO
-    # -------------------------
+    # BOTÓN GUARDAR
     if st.button("Registrar socia"):
 
         if nombre.strip() == "":
@@ -256,11 +243,11 @@ def pagina_registro_socias():
             return
 
         if len(dui) != 9:
-            st.warning("El DUI debe contener exactamente 9 dígitos.")
+            st.warning("El DUI debe tener 9 dígitos.")
             return
 
         if len(telefono) != 8:
-            st.warning("El teléfono debe contener exactamente 8 dígitos.")
+            st.warning("El teléfono debe tener 8 dígitos.")
             return
 
         cur.execute("""
@@ -280,6 +267,7 @@ def pagina_registro_socias():
         df = pd.DataFrame(data)
         st.subheader("📋 Lista de socias")
         st.dataframe(df, use_container_width=True)
+
 
 
 
