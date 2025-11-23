@@ -105,7 +105,7 @@ def interfaz_directiva():
 
 
 # ============================================================
-# 🎯 REGISTRO DE ASISTENCIA — AHORA SÍ/NO + TABLA EN LA POSICIÓN CORRECTA
+# 🎯 REGISTRO DE ASISTENCIA — SÍ/NO + TABLA EN LA POSICIÓN CORRECTA
 # ============================================================
 def pagina_asistencia():
 
@@ -114,29 +114,21 @@ def pagina_asistencia():
     con = obtener_conexion()
     cur = con.cursor(dictionary=True)
 
-    # -------------------------------------------
     # Selección de fecha
-    # -------------------------------------------
     fecha_raw = st.date_input("📅 Fecha de reunión:", date.today())
     fecha = fecha_raw.strftime("%Y-%m-%d")
 
-    # -------------------------------------------
     # Crear o recuperar reunión
-    # -------------------------------------------
     id_caja = obtener_o_crear_reunion(fecha)
 
-    # -------------------------------------------
     # Obtener socias
-    # -------------------------------------------
     cur.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cur.fetchall()
 
     st.subheader("Lista de asistencia")
     estados = {}
 
-    # -------------------------------------------
-    # Formulario por socia (Sí/No)
-    # -------------------------------------------
+    # Formulario por socia
     for s in socias:
         eleccion = st.selectbox(
             f"{s['Id_Socia']} - {s['Nombre']}",
@@ -145,9 +137,7 @@ def pagina_asistencia():
         )
         estados[s["Id_Socia"]] = "Presente" if eleccion == "Sí" else "Ausente"
 
-    # -------------------------------------------
     # Guardar asistencia
-    # -------------------------------------------
     if st.button("💾 Guardar asistencia"):
         for id_socia, estado in estados.items():
 
@@ -175,9 +165,9 @@ def pagina_asistencia():
         st.success("Asistencia guardada correctamente.")
         st.rerun()
 
-    # --------------------------------------------------
-    # Mostrar tabla de asistencia del día (NUEVA POSICIÓN)
-    # --------------------------------------------------
+    # ------------------------------
+    # Mostrar tabla de asistencia
+    # ------------------------------
     cur.execute("""
         SELECT S.Nombre, A.Estado_asistencia
         FROM Asistencia A
@@ -191,9 +181,9 @@ def pagina_asistencia():
         df_tabla = pd.DataFrame(registros)
         st.dataframe(df_tabla, use_container_width=True)
 
-    # -------------------------------------------
+    # ------------------------------
     # Resumen
-    # -------------------------------------------
+    # ------------------------------
     cur.execute("""
         SELECT Estado_asistencia
         FROM Asistencia
@@ -216,15 +206,13 @@ def pagina_asistencia():
     st.markdown("---")
 
     # ===========================================================
-    # ⭐ INGRESOS EXTRAORDINARIOS (Fecha + Socia + Concepto)
+    # ⭐ INGRESOS EXTRAORDINARIOS
     # ===========================================================
     st.subheader("💵 Registrar ingreso extraordinario (rifas, donaciones, etc.)")
 
-    # Fecha
     fecha_ing = st.date_input("📅 Fecha del ingreso:", date.today())
     fecha_ingreso = fecha_ing.strftime("%Y-%m-%d")
 
-    # Socias
     cur.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     lista = cur.fetchall()
     dict_socias = {f"{s['Id_Socia']} - {s['Nombre']}": s["Id_Socia"] for s in lista}
@@ -232,13 +220,9 @@ def pagina_asistencia():
     socia_sel = st.selectbox("Socia que aporta el ingreso:", list(dict_socias.keys()))
     id_socia_ing = dict_socias[socia_sel]
 
-    # Concepto
     concepto = st.selectbox("Concepto:", ["Rifa", "Donación", "Otros"])
-
-    # Monto
     monto = st.number_input("Monto ($)", min_value=0.01, step=0.25)
 
-    # Registrar ingreso
     if st.button("➕ Registrar ingreso extraordinario"):
 
         id_caja = obtener_o_crear_reunion(fecha_ingreso)
