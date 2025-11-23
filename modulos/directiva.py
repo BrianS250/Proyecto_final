@@ -67,22 +67,31 @@ def interfaz_directiva():
     # RUTEO
     if menu == "Registro de asistencia":
         pagina_asistencia()
+
     elif menu == "Registrar nuevas socias":
-        pagina_registro_socias()
+        registrar_socia()  # ✅ CORREGIDO
+
     elif menu == "Reglas internas":
         gestionar_reglas()
+
     elif menu == "Registrar ahorro":
         ahorro()
+
     elif menu == "Aplicar multas":
         pagina_multas()
+
     elif menu == "Autorizar préstamo":
         autorizar_prestamo()
+
     elif menu == "Registrar pago de préstamo":
         pago_prestamo()
+
     elif menu == "Gastos del grupo":
         gastos_grupo()
+
     elif menu == "Reporte de caja":
         reporte_caja()
+
     elif menu == "Cierre de ciclo":
         cierre_ciclo()
 
@@ -288,9 +297,6 @@ def registrar_socia():
             con.close()
 
 
-
-
-
 # ============================================================
 # MULTAS
 # ============================================================
@@ -331,79 +337,3 @@ def pagina_multas():
         con.commit()
         st.success("Multa registrada correctamente.")
         st.rerun()
-
-    st.markdown("---")
-    st.subheader("📋 Multas registradas")
-
-    filtro_socia = st.selectbox("Filtrar por socia:", ["Todas"] + list(dict_socias.keys()))
-    filtro_estado = st.selectbox("Estado:", ["Todos", "A pagar", "Pagada"])
-
-    query = """
-        SELECT M.Id_Multa, S.Nombre AS Socia, T.Tipo_de_multa,
-               M.Monto, M.Estado, M.Fecha_aplicacion
-        FROM Multa M
-        JOIN Socia S ON S.Id_Socia = M.Id_Socia
-        JOIN tipo_de_multa T ON T.Id_Tipo_multa = M.Id_Tipo_multa
-        WHERE 1 = 1
-    """
-    params = []
-
-    if filtro_socia != "Todas":
-        query += " AND S.Nombre = %s"
-        params.append(filtro_socia)
-
-    if filtro_estado != "Todos":
-        query += " AND M.Estado = %s"
-        params.append(filtro_estado)
-
-    query += " ORDER BY M.Id_Multa DESC"
-
-    cur.execute(query, params)
-    multas = cur.fetchall()
-
-    for m in multas:
-
-        col1, col2, col3, col4, col5, col6, col7 = st.columns([1, 3, 3, 2, 2, 2, 2])
-
-        col1.write(m["Id_Multa"])
-        col2.write(m["Socia"])
-        col3.write(m["Tipo_de_multa"])
-        col4.write(f"${m['Monto']:.2f}")
-
-        nuevo_estado = col5.selectbox(
-            " ",
-            ["A pagar", "Pagada"],
-            index=0 if m["Estado"] == "A pagar" else 1,
-            key=f"multa_{m['Id_Multa']}"
-        )
-
-        col6.write(str(m["Fecha_aplicacion"]))
-
-        if col7.button("Actualizar", key=f"u_{m['Id_Multa']}"):
-
-            estado_anterior = m["Estado"]
-
-            if estado_anterior == "A pagar" and nuevo_estado == "Pagada":
-
-                cur.execute("SELECT id_caja FROM caja_reunion WHERE fecha = %s", (m["Fecha_aplicacion"],))
-                reunion = cur.fetchone()
-
-                if reunion:
-                    id_caja = reunion["id_caja"]
-
-                    registrar_movimiento(
-                        id_caja=id_caja,
-                        tipo="Ingreso",
-                        categoria=f"Pago multa ({m['Socia']})",
-                        monto=float(m["Monto"])
-                    )
-
-            cur.execute("""
-                UPDATE Multa
-                SET Estado = %s
-                WHERE Id_Multa = %s
-            """, (nuevo_estado, m["Id_Multa"]))
-
-            con.commit()
-            st.success("Multa actualizada correctamente.")
-            st.rerun()
