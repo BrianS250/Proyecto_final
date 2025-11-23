@@ -11,7 +11,12 @@ from modulos.ahorro import ahorro
 from modulos.reporte_caja import reporte_caja
 
 # CAJA (ACTUALIZADO A CAJA ÚNICA)
-from modulos.caja import obtener_o_crear_reunion, registrar_movimiento, obtener_saldo_actual, obtener_reporte_reunion
+from modulos.caja import (
+    obtener_o_crear_reunion,
+    registrar_movimiento,
+    obtener_saldo_actual,
+    obtener_reporte_reunion
+)
 
 # OTROS GASTOS
 from modulos.gastos_grupo import gastos_grupo
@@ -22,6 +27,7 @@ from modulos.cierre_ciclo import cierre_ciclo
 # REGLAS INTERNAS
 from modulos.reglas import gestionar_reglas
 from modulos.reglas_utils import obtener_reglas
+
 
 
 
@@ -87,8 +93,7 @@ def interfaz_directiva():
         st.error(f"⚠ Error al generar reporte diario: {e}")
 
    
-
-    # ============================================
+       # ============================================
     # MENÚ LATERAL
     # ============================================
     menu = st.sidebar.radio(
@@ -109,22 +114,34 @@ def interfaz_directiva():
 
     if menu == "Registro de asistencia":
         pagina_asistencia()
+
     elif menu == "Aplicar multas":
         pagina_multas()
+
     elif menu == "Registrar nuevas socias":
         pagina_registro_socias()
+
     elif menu == "Autorizar préstamo":
         autorizar_prestamo()
+
     elif menu == "Registrar pago de préstamo":
         pago_prestamo()
+
     elif menu == "Registrar ahorro":
         ahorro()
+
     elif menu == "Registrar otros gastos":
         gastos_grupo()
+
     elif menu == "Cierre de ciclo":
         cierre_ciclo()
+
     elif menu == "Reporte de caja":
-    reporte_caja()
+        reporte_caja()
+
+    elif menu == "Reglas internas":
+        gestionar_reglas()
+
 
     # ============================================================
     # 🔵 RESUMEN DEL CICLO (Conectado a Reglas Internas)
@@ -169,9 +186,6 @@ def interfaz_directiva():
             st.info("⚠ No está definida la fecha de inicio del ciclo en Reglas Internas.")
     else:
         st.info("⚠ Debes registrar reglas internas primero.")
-
-    elif menu == "Reglas internas":
-        gestionar_reglas()
 
 
 
