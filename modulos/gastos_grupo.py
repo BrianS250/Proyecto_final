@@ -43,24 +43,37 @@ def gastos_grupo():
     # MONTO
     # --------------------------------------------------------
     monto = st.number_input("Monto del gasto ($)", min_value=0.01, step=0.01)
-
     monto_decimal = Decimal(str(monto))
 
     # --------------------------------------------------------
-    # SALDO DISPONIBLE — caja_reunion
+    # SALDO DISPONIBLE — caja_reunion (CORREGIDO PARA MAYOR CLARIDAD)
     # --------------------------------------------------------
+
+    # Saldo del cierre anterior
     cursor.execute("""
         SELECT saldo_final
         FROM caja_reunion
-        WHERE fecha <= %s
+        WHERE fecha < %s
         ORDER BY fecha DESC
         LIMIT 1
     """, (fecha,))
-    row = cursor.fetchone()
+    row_prev = cursor.fetchone()
+    saldo_prev = Decimal(str(row_prev["saldo_final"])) if row_prev else Decimal("0.00")
 
-    saldo = Decimal(str(row["saldo_final"])) if row else Decimal("0.00")
+    # Saldo actualizado al día (si ya existe una reunión)
+    cursor.execute("""
+        SELECT saldo_final
+        FROM caja_reunion
+        WHERE fecha = %s
+        LIMIT 1
+    """, (fecha,))
+    row_today = cursor.fetchone()
+    saldo_today = Decimal(str(row_today["saldo_final"])) if row_today else saldo_prev
 
-    st.info(f"💰 Saldo disponible en caja para {fecha}: **${saldo:.2f}**")
+    st.info(
+        f"📌 **Saldo antes de esta fecha:** ${saldo_prev:.2f}\n\n"
+        f"📌 **Saldo disponible hoy:** ${saldo_today:.2f}"
+    )
 
     # --------------------------------------------------------
     # BOTÓN DE REGISTRO
@@ -80,15 +93,15 @@ def gastos_grupo():
             st.error("❌ El monto debe ser mayor a 0.")
             return
 
-        if monto_decimal > saldo:
+        if monto_decimal > saldo_today:
             st.error("❌ No se puede registrar el gasto, saldo insuficiente.")
             return
 
-        # Obtener o crear la reunión
+        # Crear/obtener caja correcta para esa fecha
         id_caja = obtener_o_crear_reunion(fecha)
 
         try:
-            # Registrar el gasto en tabla Gastos_grupo
+            # Registrar gasto
             cursor.execute("""
                 INSERT INTO Gastos_grupo
                 (Fecha_gasto, Descripcion, Monto, Responsable, DUI, Id_Caja)
@@ -104,7 +117,7 @@ def gastos_grupo():
 
             con.commit()
 
-            # Registrar el egreso en caja
+            # Registrar egreso en caja
             registrar_movimiento(
                 id_caja=id_caja,
                 tipo="Egreso",
@@ -115,7 +128,7 @@ def gastos_grupo():
             st.success("✔ Gasto registrado correctamente.")
 
             # --------------------------------------------------------
-            # GENERAR PDF — SEGURO Y ESTABLE
+            # GENERAR PDF
             # --------------------------------------------------------
             nombre_pdf = f"gasto_{id_caja}_{fecha}.pdf"
 
