@@ -57,19 +57,42 @@ def autorizar_prestamo():
         socia_sel = st.selectbox("👩 Socia", list(lista_socias.keys()))
         id_socia = lista_socias[socia_sel]
 
+        # ============================================================
+        # Recuperar ahorro total de la socia
+        # ============================================================
+        cursor.execute("""
+            SELECT `Saldo acumulado`
+            FROM Ahorro
+            WHERE Id_Socia=%s
+            ORDER BY Id_Ahorro DESC
+            LIMIT 1
+        """, (id_socia,))
+        row = cursor.fetchone()
+        ahorro_total = Decimal(row["Saldo acumulado"]) if row else Decimal("0.00")
+
+        # ============================================================
+        # Nuevo límite real del préstamo
+        # ============================================================
+        limite_real = float(min(ahorro_total, Decimal(prestamo_maximo)))
+
         monto = st.number_input(
             "💵 Monto prestado ($):",
             min_value=1.0,
-            max_value=prestamo_maximo,
-            step=1.0
+            max_value=limite_real,
+            step=1.0,
+            help=f"Monto máximo permitido según ahorro y reglas: ${limite_real}"
         )
 
+        # ============================================================
+        # Interés AUTOMÁTICO, NO EDITABLE
+        # ============================================================
         tasa_calculada = (monto / 10) * interes_por_10
 
         tasa = st.number_input(
             "📈 Interés (%)",
             min_value=0.0,
-            value=round(tasa_calculada, 2)
+            value=round(tasa_calculada, 2),
+            disabled=True
         )
 
         plazo = st.number_input(
@@ -87,6 +110,9 @@ def autorizar_prestamo():
 
         enviar = st.form_submit_button("✅ Autorizar préstamo")
 
+    # ============================================================
+    # DETENER SI NO ENVÍA
+    # ============================================================
     if not enviar:
         return
 
@@ -103,24 +129,14 @@ def autorizar_prestamo():
         return
 
     # ============================================================
-    # VALIDACIÓN – Ahorro disponible
+    # VALIDACIÓN – Ahorro suficiente
     # ============================================================
-    cursor.execute("""
-        SELECT `Saldo acumulado`
-        FROM Ahorro
-        WHERE Id_Socia=%s
-        ORDER BY Id_Ahorro DESC
-        LIMIT 1
-    """, (id_socia,))
-    row = cursor.fetchone()
-    ahorro_total = Decimal(row["Saldo acumulado"]) if row else Decimal("0.00")
-
     if Decimal(monto) > ahorro_total:
         st.error(f"❌ Ahorro insuficiente. Tiene ${ahorro_total}.")
         return
 
     # ============================================================
-    # VALIDACIÓN – Caja suficiente en la fecha del préstamo
+    # VALIDACIÓN – Caja suficiente
     # ============================================================
     id_caja = obtener_o_crear_reunion(fecha_prestamo)
 
@@ -132,7 +148,7 @@ def autorizar_prestamo():
         return
 
     # ============================================================
-    # CÁLCULO FINAL
+    # CÁLCULOS
     # ============================================================
     interes_total = Decimal(monto) * (Decimal(tasa) / 100)
     total_pagar = Decimal(monto) + interes_total
@@ -184,7 +200,7 @@ def autorizar_prestamo():
     )
 
     # ============================================================
-    # CUOTAS DEL PRÉSTAMO (cada 15 días)
+    # CUOTAS (cada 15 días)
     # ============================================================
     valor_cuota = total_pagar / Decimal(cuotas)
     fecha_base = datetime.strptime(fecha_prestamo, "%Y-%m-%d")
