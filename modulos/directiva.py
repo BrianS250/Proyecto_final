@@ -207,6 +207,9 @@ def pagina_asistencia():
         st.rerun()
 
 
+# ============================================================
+# REGISTRO DE NUEVAS SOCIAS — FINAL Y CORREGIDO
+# ============================================================
 def pagina_registro_socias():
 
     st.header("👩‍🦰 Registrar nuevas socias")
@@ -214,28 +217,24 @@ def pagina_registro_socias():
     con = obtener_conexion()
     cur = con.cursor(dictionary=True)
 
-    # -----------------------------
-    # CAMPOS CORRECTOS
-    # -----------------------------
+    # ----------- INPUTS CORREGIDOS ----------
     nombre = st.text_input("Nombre completo de la socia:")
 
     dui_raw = st.text_input("Número de DUI (9 dígitos):")
-    # permitir solo números
-    dui = ''.join(filter(str.isdigit, dui_raw))[:9]
+    # Eliminar letras y limitar a 9 dígitos
+    dui = "".join([c for c in dui_raw if c.isdigit()])[:9]
 
     telefono_raw = st.text_input("Número de teléfono (8 dígitos):")
-    # permitir solo números
-    telefono = ''.join(filter(str.isdigit, telefono_raw))[:8]
+    # Eliminar letras y limitar a 8 dígitos
+    telefono = "".join([c for c in telefono_raw if c.isdigit()])[:8]
 
-    # Mostrar correcciones automáticas sin agregar campos
+    # Mostrar el texto corregido automáticamente
     if dui_raw != dui:
-        st.warning("⚠ Solo se permiten números y máximo 9 dígitos en el DUI.")
+        st.warning("⚠ Solo se permiten números (máx. 9) en el DUI.")
     if telefono_raw != telefono:
-        st.warning("⚠ Solo se permiten números y máximo 8 dígitos en el teléfono.")
+        st.warning("⚠ Solo se permiten números (máx. 8) en el teléfono.")
 
-    # -----------------------------
-    # BOTÓN GUARDAR
-    # -----------------------------
+    # ----------- BOTÓN DE REGISTRO ----------
     if st.button("Registrar socia"):
 
         if nombre.strip() == "":
@@ -243,32 +242,31 @@ def pagina_registro_socias():
             return
 
         if len(dui) != 9:
-            st.warning("El DUI debe contener exactamente 9 dígitos.")
+            st.warning("El DUI debe tener exactamente 9 dígitos.")
             return
 
         if len(telefono) != 8:
-            st.warning("El teléfono debe contener exactamente 8 dígitos.")
+            st.warning("El teléfono debe tener exactamente 8 dígitos.")
             return
 
         cur.execute("""
-            INSERT INTO Socia(Nombre, DUI, Telefono)
-            VALUES(%s, %s, %s)
+            INSERT INTO Socia (Nombre, DUI, Telefono)
+            VALUES (%s, %s, %s)
         """, (nombre, dui, telefono))
         con.commit()
 
         st.success(f"Socia '{nombre}' registrada correctamente.")
         st.rerun()
 
-    # -----------------------------
-    # LISTA DE SOCIAS
-    # -----------------------------
-    cur.execute("SELECT Id_Socia, Nombre, DUI FROM Socia ORDER BY Id_Socia ASC")
+    # ----------- LISTA DE SOCIAS ----------
+    cur.execute("SELECT Id_Socia, Nombre, DUI, Telefono FROM Socia ORDER BY Id_Socia ASC")
     data = cur.fetchall()
 
     if data:
         df = pd.DataFrame(data)
         st.subheader("📋 Lista de socias")
         st.dataframe(df, use_container_width=True)
+
 
 
 
