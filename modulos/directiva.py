@@ -208,7 +208,7 @@ def pagina_asistencia():
 
 
 # ============================================================
-# REGISTRO DE NUEVAS SOCIAS — FINAL Y CORREGIDO
+# REGISTRO DE NUEVAS SOCIAS — SOLO NÚMEROS, SIN LETRAS
 # ============================================================
 def pagina_registro_socias():
 
@@ -217,24 +217,41 @@ def pagina_registro_socias():
     con = obtener_conexion()
     cur = con.cursor(dictionary=True)
 
-    # ----------- INPUTS CORREGIDOS ----------
+    # ---------------------------
+    # CAMPO: NOMBRE
+    # ---------------------------
     nombre = st.text_input("Nombre completo de la socia:")
 
-    dui_raw = st.text_input("Número de DUI (9 dígitos):")
-    # Eliminar letras y limitar a 9 dígitos
-    dui = "".join([c for c in dui_raw if c.isdigit()])[:9]
+    # ---------------------------
+    # CAMPO: DUI (solo números y max 9 dígitos)
+    # ---------------------------
+    dui_num = st.number_input(
+        "Número de DUI (9 dígitos):",
+        min_value=0,
+        max_value=999999999,  # 9 dígitos
+        step=1,
+        format="%d"
+    )
 
-    telefono_raw = st.text_input("Número de teléfono (8 dígitos):")
-    # Eliminar letras y limitar a 8 dígitos
-    telefono = "".join([c for c in telefono_raw if c.isdigit()])[:8]
+    # Convertimos a string para insertar en DB
+    dui = str(dui_num).zfill(9)
 
-    # Mostrar el texto corregido automáticamente
-    if dui_raw != dui:
-        st.warning("⚠ Solo se permiten números (máx. 9) en el DUI.")
-    if telefono_raw != telefono:
-        st.warning("⚠ Solo se permiten números (máx. 8) en el teléfono.")
+    # ---------------------------
+    # CAMPO: TELÉFONO (solo números y max 8 dígitos)
+    # ---------------------------
+    tel_num = st.number_input(
+        "Número de teléfono (8 dígitos):",
+        min_value=0,
+        max_value=99999999,  # 8 dígitos
+        step=1,
+        format="%d"
+    )
 
-    # ----------- BOTÓN DE REGISTRO ----------
+    telefono = str(tel_num).zfill(8)
+
+    # ---------------------------
+    # BOTÓN DE REGISTRO
+    # ---------------------------
     if st.button("Registrar socia"):
 
         if nombre.strip() == "":
@@ -258,7 +275,9 @@ def pagina_registro_socias():
         st.success(f"Socia '{nombre}' registrada correctamente.")
         st.rerun()
 
-    # ----------- LISTA DE SOCIAS ----------
+    # ---------------------------
+    # LISTA DE SOCIAS
+    # ---------------------------
     cur.execute("SELECT Id_Socia, Nombre, DUI, Telefono FROM Socia ORDER BY Id_Socia ASC")
     data = cur.fetchall()
 
