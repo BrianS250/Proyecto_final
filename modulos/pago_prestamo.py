@@ -1,31 +1,44 @@
 import streamlit as st
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from modulos.conexion import obtener_conexion
 from modulos.caja import registrar_movimiento, obtener_o_crear_reunion
+from modulos.reglas_utils import obtener_reglas  # ← NUEVO
 
 
 def pago_prestamo():
 
     st.header("💵 Registro de pagos de préstamos")
 
+    # ----------------------------------------------------
+    # 🔗 Cargar REGLAS INTERNAS
+    # ----------------------------------------------------
+    reglas = obtener_reglas()
+
+    if not reglas:
+        st.error("⚠ No hay reglas internas registradas. Configúralas primero.")
+        return
+
+    multa_mora = float(reglas["multa_mora"])  # ← valor configurado desde reglas
+
     con = obtener_conexion()
     cur = con.cursor(dictionary=True)
 
-    # -----------------------------------------------
+    # ----------------------------------------------------
     # SOCIAS
-    # -----------------------------------------------
+    # ----------------------------------------------------
     cur.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cur.fetchall()
+
     dict_socias = {f"{s['Id_Socia']} - {s['Nombre']}": s["Id_Socia"] for s in socias}
 
     socia_sel = st.selectbox("👩 Seleccione la socia:", dict_socias.keys())
     id_socia = dict_socias[socia_sel]
 
-    # -----------------------------------------------
+    # ----------------------------------------------------
     # PRÉSTAMO ACTIVO
-    # -----------------------------------------------
+    # ----------------------------------------------------
     cur.execute("""
         SELECT *
         FROM Prestamo
@@ -50,16 +63,15 @@ def pago_prestamo():
 
     st.divider()
 
-    # -----------------------------------------------
+    # ----------------------------------------------------
     # CUOTAS PENDIENTES
-    # -----------------------------------------------
+    # ----------------------------------------------------
     cur.execute("""
         SELECT *
         FROM Cuotas_prestamo
         WHERE Id_Prestamo=%s AND Estado='pendiente'
         ORDER BY Numero_cuota ASC
     """, (id_prestamo,))
-
     cuotas = cur.fetchall()
 
     if not cuotas:
@@ -79,19 +91,41 @@ def pago_prestamo():
 
     fecha_pago = st.date_input("📅 Fecha del pago:", date.today()).strftime("%Y-%m-%d")
 
-    # -----------------------------------------------
+    # ----------------------------------------------------
     # REGISTRAR PAGO
-    # -----------------------------------------------
+    # ----------------------------------------------------
     if st.button("💾 Registrar pago"):
 
-        # obtener datos de la cuota
+        # ► Obtener datos de la cuota
         cur.execute("SELECT * FROM Cuotas_prestamo WHERE Id_Cuota=%s", (id_cuota,))
         cuota = cur.fetchone()
-        monto_cuota = Decimal(cuota["Monto_cuota"])
 
-        # ------------------------------------------------------
-        # 1️⃣ Registrar movimiento en CAJA ÚNICA + reunión
-        # ------------------------------------------------------
+        monto_cuota = Decimal(cuota["Monto_cuota"])
+        fecha_programada = datetime.strptime(cuota["Fecha_programada"], "%Y-%m-%d")
+        fecha_pagada_dt = datetime.strptime(fecha_pago, "%Y-%m-%d")
+
+        # ----------------------------------------------------
+        # 1️⃣ Revisar si hay MOROSIDAD
+        # ----------------------------------------------------
+        if fecha_pagada_dt > fecha_programada:
+            # Atrasada → aplicar multa MORATORIA
+            cur.execute("""
+                INSERT INTO Multa(Monto, Fecha_aplicacion, Estado, Id_Tipo_multa, Id_Socia)
+                VALUES (%s, %s, 'A pagar', 2, %s)
+            """, (multa_mora, fecha_pago, id_socia))
+
+            # Registrar ingreso pendiente en caja
+            id_caja_multa = obtener_o_crear_reunion(fecha_pago)
+            registrar_movimiento(
+                id_caja=id_caja_multa,
+                tipo="Ingreso",
+                categoria=f"Multa por mora (Préstamo #{id_prestamo})",
+                monto=multa_mora
+            )
+
+        # ----------------------------------------------------
+        # 2️⃣ Registrar movimiento de pago → CAJA ÚNICA
+        # ----------------------------------------------------
         id_caja = obtener_o_crear_reunion(fecha_pago)
 
         registrar_movimiento(
@@ -101,18 +135,18 @@ def pago_prestamo():
             monto=monto_cuota
         )
 
-        # ------------------------------------------------------
-        # 2️⃣ Marcar cuota como pagada
-        # ------------------------------------------------------
+        # ----------------------------------------------------
+        # 3️⃣ Actualizar cuota como pagada
+        # ----------------------------------------------------
         cur.execute("""
             UPDATE Cuotas_prestamo
             SET Estado='pagada', Fecha_pago=%s, Id_Caja=%s
             WHERE Id_Cuota=%s
         """, (fecha_pago, id_caja, id_cuota))
 
-        # ------------------------------------------------------
-        # 3️⃣ Actualizar saldo del préstamo
-        # ------------------------------------------------------
+        # ----------------------------------------------------
+        # 4️⃣ Actualizar saldo del préstamo
+        # ----------------------------------------------------
         nuevo_saldo = saldo_pendiente - monto_cuota
         if nuevo_saldo < 0:
             nuevo_saldo = Decimal("0.00")
@@ -129,3 +163,4 @@ def pago_prestamo():
 
         st.success("✔ Pago registrado correctamente.")
         st.rerun()
+
