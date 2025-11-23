@@ -208,7 +208,7 @@ def pagina_asistencia():
 
 
 # ============================================================
-# REGISTRO DE NUEVAS SOCIAS — VALIDACIÓN PERFECTA (SOLO NÚMEROS)
+# REGISTRO DE NUEVAS SOCIAS — VALIDACIÓN PERFECTA
 # ============================================================
 def pagina_registro_socias():
 
@@ -217,58 +217,89 @@ def pagina_registro_socias():
     con = obtener_conexion()
     cur = con.cursor(dictionary=True)
 
-    # === ORDEN CORRECTO ===
+    # ------------------------------
+    # CAMPOS EN EL ORDEN CORRECTO
+    # ------------------------------
+
+    # 1. Nombre
     nombre = st.text_input("Nombre completo de la socia:")
 
-    dui = st.number_input(
+    # 2. DUI (solo números, máximo 9)
+    dui = st.text_input(
         "Número de DUI (9 dígitos):",
-        min_value=0,
-        max_value=999999999,
-        step=1,
-        format="%d"
+        max_chars=9
     )
 
-    telefono = st.number_input(
+    # Forzar solo números y no más de 9
+    dui = "".join([c for c in dui if c.isdigit()])[:9]
+
+    # Refrescar en pantalla
+    st.session_state["dui_fixed"] = dui
+    dui = st.session_state["dui_fixed"]
+
+    # Mostrar caja corregida
+    st.text_input(
+        "Corrección automática del DUI:",
+        value=dui,
+        disabled=True
+    )
+
+    # 3. Teléfono (solo números, máximo 8)
+    telefono = st.text_input(
         "Número de teléfono (8 dígitos):",
-        min_value=0,
-        max_value=99999999,
-        step=1,
-        format="%d"
+        max_chars=8
     )
 
-    # === Validación ===
+    # Forzar solo números
+    telefono = "".join([c for c in telefono if c.isdigit()])[:8]
+
+    st.session_state["tel_fixed"] = telefono
+    telefono = st.session_state["tel_fixed"]
+
+    st.text_input(
+        "Corrección automática del teléfono:",
+        value=telefono,
+        disabled=True
+    )
+
+    # ------------------------------
+    # BOTÓN REGISTRAR
+    # ------------------------------
     if st.button("Registrar socia"):
 
+        # Validaciones finales
         if nombre.strip() == "":
             st.warning("Debe ingresar un nombre.")
             return
 
-        if len(str(dui)) != 9:
-            st.warning("El DUI debe tener exactamente 9 dígitos.")
+        if len(dui) != 9:
+            st.warning("El DUI debe contener exactamente 9 dígitos.")
             return
 
-        if len(str(telefono)) != 8:
-            st.warning("El teléfono debe tener exactamente 8 dígitos.")
+        if len(telefono) != 8:
+            st.warning("El teléfono debe contener exactamente 8 dígitos.")
             return
 
-        # Guardar en BD
+        # Insertar
         cur.execute("""
             INSERT INTO Socia(Nombre, DUI, Telefono)
             VALUES(%s, %s, %s)
-        """, (nombre, str(dui), str(telefono)))
+        """, (nombre, dui, telefono))
         con.commit()
 
         st.success(f"Socia '{nombre}' registrada correctamente.")
         st.rerun()
 
-    # Mostrar lista
+    # ------------------------------
+    # LISTA DE SOCIAS
+    # ------------------------------
     cur.execute("SELECT Id_Socia, Nombre, DUI FROM Socia ORDER BY Id_Socia ASC")
     data = cur.fetchall()
 
     if data:
-        df = pd.DataFrame(data)
         st.subheader("📋 Lista de socias")
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(pd.DataFrame(data), use_container_width=True)
+
 
 
 
