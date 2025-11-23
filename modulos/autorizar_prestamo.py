@@ -91,8 +91,9 @@ def autorizar_prestamo():
 
         # No permitir exceder el máximo real
         if monto > limite_real:
-            st.error(f"❌ El monto máximo permitido es: ${limite_real}.")
-            st.stop()
+        st.error(f"❌ El monto máximo permitido es: ${limite_real}.")
+        return
+
 
         # ============================================================
         # Interés FIJO según reglas internas (6%) — NO EDITABLE
