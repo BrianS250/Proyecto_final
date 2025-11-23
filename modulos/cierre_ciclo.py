@@ -9,7 +9,7 @@ def cierre_ciclo():
     st.title("🔴 Cierre del Ciclo General – Solidaridad CVX")
 
     # ======================================================
-    # 1️⃣ LEER REGLAS INTERNAS PARA OBTENER FECHAS DE CICLO
+    # 1️⃣ LEER REGLAS INTERNAS (FECHAS DEL CICLO)
     # ======================================================
     reglas = obtener_reglas()
 
@@ -17,8 +17,8 @@ def cierre_ciclo():
         st.error("⚠ No existen reglas internas registradas. Debes definirlas primero.")
         return
 
-    fecha_inicio_reg = reglas["fecha_inicio_ciclo"]
-    fecha_fin_reg = reglas["fecha_fin_ciclo"]
+    fecha_inicio_reg = reglas.get("fecha_inicio_ciclo")
+    fecha_fin_reg = reglas.get("fecha_fin_ciclo")
 
     if not fecha_inicio_reg:
         st.error("⚠ Debes definir la fecha de inicio del ciclo en Reglas Internas.")
@@ -27,14 +27,16 @@ def cierre_ciclo():
     st.info(f"📌 Ciclo según reglamento: **{fecha_inicio_reg} → {fecha_fin_reg or 'Activo'}**")
 
     # ======================================================
-    # 2️⃣ CONEXIÓN A BD
+    # 2️⃣ CONEXIÓN
     # ======================================================
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
 
     # ======================================================
-    # 3️⃣ CALCULAR INGRESOS DEL CICLO
+    # 3️⃣ INGRESOS DEL CICLO
     # ======================================================
+
+    # Multas pagadas
     cursor.execute("""
         SELECT IFNULL(SUM(Monto),0) AS total
         FROM Multa
@@ -43,6 +45,7 @@ def cierre_ciclo():
     """, (fecha_inicio_reg,))
     total_multas = cursor.fetchone()["total"]
 
+    # Ingresos extraordinarios
     cursor.execute("""
         SELECT IFNULL(SUM(Monto),0) AS total
         FROM IngresosExtra
@@ -50,7 +53,7 @@ def cierre_ciclo():
     """, (fecha_inicio_reg,))
     total_ing_extra = cursor.fetchone()["total"]
 
-    # PAGOS DE PRÉSTAMO (interés + capital)
+    # Pagos de préstamo (suma de cuotas pagadas)
     cursor.execute("""
         SELECT IFNULL(SUM(Monto_cuota),0) AS total
         FROM Cuotas_prestamo
@@ -62,7 +65,7 @@ def cierre_ciclo():
     total_ingresos = total_multas + total_ing_extra + total_pagos
 
     # ======================================================
-    # 4️⃣ EGRESOS DEL CICLO (solo préstamos otorgados)
+    # 4️⃣ EGRESOS DEL CICLO (PRÉSTAMOS OTORGADOS)
     # ======================================================
     cursor.execute("""
         SELECT IFNULL(SUM(`Monto prestado`),0) AS total
@@ -74,20 +77,18 @@ def cierre_ciclo():
     total_egresos = total_prestamos
 
     # ======================================================
-    # 5️⃣ SALDOS
+    # 5️⃣ RESULTADOS
     # ======================================================
     monto_repartido = total_ingresos - total_egresos
-    saldo_final = 0.00  # siempre reinicia
 
     st.subheader("📊 Resumen del ciclo")
-
     st.write(f"💰 **Total ingresos:** ${total_ingresos:,.2f}")
-    st.write(f"🏦 **Total egresos:** ${total_egresos:,.2f}")
-    st.success(f"🧮 **Monto a repartir en cierre:** ${monto_repartido:,.2f}")
-    st.info("📌 El saldo final del ciclo queda en **$0.00** ya que todo se reparte.")
+    st.write(f"🏛 **Total egresos:** ${total_egresos:,.2f}")
+    st.success(f"🧮 **Monto a repartir:** ${monto_repartido:,.2f}")
+    st.info("📌 El saldo final del ciclo se reinicia a **$0.00** porque todo se reparte.")
 
     # ======================================================
-    # 6️⃣ FINALIZAR CICLO
+    # 6️⃣ CERRAR CICLO (ACTUALIZAR SOLO REGLAS INTERNAS)
     # ======================================================
     if st.button("🔒 Cerrar ciclo con estas condiciones"):
 
@@ -100,5 +101,6 @@ def cierre_ciclo():
 
         con.commit()
 
-        st.success("✔ Ciclo cerrado correctamente y fecha final registrada.")
+        st.success("✔ Ciclo cerrado correctamente. Fecha final actualizada en reglas internas.")
         st.rerun()
+
