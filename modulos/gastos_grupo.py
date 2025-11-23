@@ -8,7 +8,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 
 from modulos.conexion import obtener_conexion
-from modulos.caja import obtener_o_crear_reunion, registrar_movimiento
+from modulos.caja import obtener_o_crear_reunion, registrar_movimiento, obtener_saldo_actual
 
 
 # ------------------------------------------------------------
@@ -76,7 +76,7 @@ def gastos_grupo():
     descripcion = st.text_input("Descripción del gasto").strip()
 
     # --------------------------------------------------------
-    # MONTO
+    # MONTO DEL GASTO
     # --------------------------------------------------------
     monto_raw = st.number_input(
         "Monto del gasto ($)",
@@ -96,7 +96,7 @@ def gastos_grupo():
     st.info(f"📌 Saldo disponible (caja actual): **${saldo_global:,.2f}**")
 
     # --------------------------------------------------------
-    # VALIDACIÓN
+    # VALIDACIÓN PRINCIPAL
     # --------------------------------------------------------
     if monto > saldo_global:
         st.error(
@@ -110,18 +110,20 @@ def gastos_grupo():
     id_reunion = obtener_o_crear_reunion(fecha)
 
     # --------------------------------------------------------
-    # BOTÓN PARA GUARDAR
+    # BOTÓN PARA GUARDAR EL GASTO
     # --------------------------------------------------------
     if st.button("💾 Registrar gasto"):
 
         try:
+            # Categoría final para BD
+            categoria_final = f"{descripcion} — Responsable: {responsable}"
+
+            # Registrar movimiento (compatible con TU backend)
             registrar_movimiento(
                 id_caja=id_reunion,
-                tipo="egreso",
-                monto=monto,
-                descripcion=descripcion,
-                responsable=responsable,
-                fecha=fecha
+                tipo="Egreso",
+                categoria=categoria_final,
+                monto=monto
             )
 
             # Nuevo saldo después del gasto
@@ -131,8 +133,12 @@ def gastos_grupo():
 
             # Generar PDF
             pdf_path = generar_pdf_gasto(
-                fecha, responsable, descripcion,
-                float(monto), saldo_global, saldo_despues
+                fecha,
+                responsable,
+                descripcion,
+                float(monto),
+                saldo_global,
+                saldo_despues
             )
 
             st.success("✅ Gasto registrado correctamente.")
