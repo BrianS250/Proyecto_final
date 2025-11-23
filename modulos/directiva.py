@@ -39,14 +39,14 @@ def interfaz_directiva():
         st.rerun()
 
     # -------------------------------------------
-    # MOSTRAR SALDO DE CAJA (último saldo_final)
+    # MOSTRAR SALDO DE CAJA (saldo REAL)
     # -------------------------------------------
     try:
         con = obtener_conexion()
         cur = con.cursor(dictionary=True)
-        cur.execute("SELECT saldo_final FROM caja_reunion ORDER BY fecha DESC LIMIT 1")
+        cur.execute("SELECT saldo_actual FROM caja_general WHERE id = 1")
         row = cur.fetchone()
-        saldo = row["saldo_final"] if row else 0
+        saldo = row["saldo_actual"] if row else 0
         st.info(f"💰 *Saldo actual de caja:* **${saldo:.2f}**")
     except:
         st.warning("⚠ No se pudo obtener el saldo actual de caja.")
@@ -114,21 +114,17 @@ def pagina_asistencia():
     con = obtener_conexion()
     cur = con.cursor(dictionary=True)
 
-    # Selección de fecha
     fecha_raw = st.date_input("📅 Fecha de reunión:", date.today())
     fecha = fecha_raw.strftime("%Y-%m-%d")
 
-    # Crear o recuperar reunión
     id_caja = obtener_o_crear_reunion(fecha)
 
-    # Obtener socias
     cur.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cur.fetchall()
 
     st.subheader("Lista de asistencia")
     estados = {}
 
-    # Formulario por socia
     for s in socias:
         eleccion = st.selectbox(
             f"{s['Id_Socia']} - {s['Nombre']}",
@@ -137,7 +133,6 @@ def pagina_asistencia():
         )
         estados[s["Id_Socia"]] = "Presente" if eleccion == "Sí" else "Ausente"
 
-    # Guardar asistencia
     if st.button("💾 Guardar asistencia"):
         for id_socia, estado in estados.items():
 
@@ -165,9 +160,6 @@ def pagina_asistencia():
         st.success("Asistencia guardada correctamente.")
         st.rerun()
 
-    # ------------------------------
-    # Mostrar tabla de asistencia
-    # ------------------------------
     cur.execute("""
         SELECT S.Nombre, A.Estado_asistencia
         FROM Asistencia A
@@ -181,9 +173,6 @@ def pagina_asistencia():
         df_tabla = pd.DataFrame(registros)
         st.dataframe(df_tabla, use_container_width=True)
 
-    # ------------------------------
-    # Resumen
-    # ------------------------------
     cur.execute("""
         SELECT Estado_asistencia
         FROM Asistencia
