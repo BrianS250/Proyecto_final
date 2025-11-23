@@ -93,7 +93,7 @@ def gastos_grupo():
     fila_saldo = cursor.fetchone()
     saldo_global = float(fila_saldo["saldo_final"]) if fila_saldo else 0.0
 
-    st.info(f"📌 Saldo disponible (caja actual): **${saldo_global:,.2f}**")
+    # *SE ELIMINÓ EL ST.INFO DE ABAJO POR TU SOLICITUD*
 
     # --------------------------------------------------------
     # VALIDACIÓN
@@ -137,33 +137,16 @@ def gastos_grupo():
 
             st.success("✅ Gasto registrado correctamente.")
 
-            # --------------------------------------------------------
-            # 🔥 MEJORA EXIGIDA — Actualizar saldo inmediatamente
-            # --------------------------------------------------------
-            st.session_state["pdf_gasto"] = pdf_path
-            st.session_state["trigger_download"] = True
-
-            st.rerun()
+            st.download_button(
+                "📄 Descargar comprobante PDF",
+                data=open(pdf_path, "rb").read(),
+                file_name=pdf_path,
+                mime="application/pdf"
+            )
 
         except Exception as e:
             st.error("❌ Ocurrió un error al registrar el gasto.")
             st.write(e)
-
-    # --------------------------------------------------------
-    # 🔥 Mostrar el PDF después del rerun
-    # --------------------------------------------------------
-    if "trigger_download" in st.session_state and st.session_state["trigger_download"]:
-        pdf_path = st.session_state["pdf_gasto"]
-
-        st.download_button(
-            "📄 Descargar comprobante PDF",
-            data=open(pdf_path, "rb").read(),
-            file_name=pdf_path,
-            mime="application/pdf"
-        )
-
-        # Evitar mostrarlo otra vez
-        st.session_state["trigger_download"] = False
 
     cursor.close()
     con.close()
