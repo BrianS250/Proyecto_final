@@ -208,7 +208,7 @@ def pagina_asistencia():
 
 
 # ============================================================
-# REGISTRO DE NUEVAS SOCIAS — SOLO NÚMEROS, SIN LETRAS
+# REGISTRO DE NUEVAS SOCIAS — SOLO NÚMEROS Y LÍMITES EXACTOS
 # ============================================================
 def pagina_registro_socias():
 
@@ -217,75 +217,78 @@ def pagina_registro_socias():
     con = obtener_conexion()
     cur = con.cursor(dictionary=True)
 
-    # ---------------------------
-    # CAMPO: NOMBRE
-    # ---------------------------
+    # ------------------------
+    # NOMBRE
+    # ------------------------
     nombre = st.text_input("Nombre completo de la socia:")
 
-    # ---------------------------
-    # CAMPO: DUI (solo números y max 9 dígitos)
-    # ---------------------------
-    dui_num = st.number_input(
-        "Número de DUI (9 dígitos):",
-        min_value=0,
-        max_value=999999999,  # 9 dígitos
-        step=1,
-        format="%d"
-    )
+    # ------------------------
+    # DUI (solo números, máximo 9)
+    # ------------------------
+    dui_raw = st.text_input("Número de DUI (9 dígitos):")
 
-    # Convertimos a string para insertar en DB
-    dui = str(dui_num).zfill(9)
+    # Filtro EN VIVO: elimina letras y caracteres no numéricos
+    dui = "".join([c for c in dui_raw if c.isdigit()])[:9]
 
-    # ---------------------------
-    # CAMPO: TELÉFONO (solo números y max 8 dígitos)
-    # ---------------------------
-    tel_num = st.number_input(
-        "Número de teléfono (8 dígitos):",
-        min_value=0,
-        max_value=99999999,  # 8 dígitos
-        step=1,
-        format="%d"
-    )
+    # Sobrescribir input mostrado
+    if dui_raw != dui:
+        st.warning("⚠ Solo se permiten números y máximo 9 dígitos en el DUI.")
+        st.session_state["dui_corr"] = dui
+        st.experimental_rerun()
 
-    telefono = str(tel_num).zfill(8)
+    dui = st.session_state.get("dui_corr", dui)
 
-    # ---------------------------
-    # BOTÓN DE REGISTRO
-    # ---------------------------
+    # ------------------------
+    # TELÉFONO (solo números, máximo 8)
+    # ------------------------
+    tel_raw = st.text_input("Número de teléfono (8 dígitos):")
+
+    telefono = "".join([c for c in tel_raw if c.isdigit()])[:8]
+
+    if tel_raw != telefono:
+        st.warning("⚠ Solo se permiten números y máximo 8 dígitos en el teléfono.")
+        st.session_state["tel_corr"] = telefono
+        st.experimental_rerun()
+
+    telefono = st.session_state.get("tel_corr", telefono)
+
+    # ------------------------
+    # BOTÓN REGISTRAR
+    # ------------------------
     if st.button("Registrar socia"):
 
         if nombre.strip() == "":
-            st.warning("Debe ingresar un nombre.")
+            st.error("Debe ingresar un nombre.")
             return
 
         if len(dui) != 9:
-            st.warning("El DUI debe tener exactamente 9 dígitos.")
+            st.error("El DUI debe tener exactamente 9 números.")
             return
 
         if len(telefono) != 8:
-            st.warning("El teléfono debe tener exactamente 8 dígitos.")
+            st.error("El teléfono debe tener exactamente 8 números.")
             return
 
         cur.execute("""
-            INSERT INTO Socia (Nombre, DUI, Telefono)
-            VALUES (%s, %s, %s)
+            INSERT INTO Socia(Nombre, DUI, Telefono)
+            VALUES(%s, %s, %s)
         """, (nombre, dui, telefono))
         con.commit()
 
         st.success(f"Socia '{nombre}' registrada correctamente.")
-        st.rerun()
+        st.session_state.pop("dui_corr", None)
+        st.session_state.pop("tel_corr", None)
+        st.experimental_rerun()
 
-    # ---------------------------
-    # LISTA DE SOCIAS
-    # ---------------------------
-    cur.execute("SELECT Id_Socia, Nombre, DUI, Telefono FROM Socia ORDER BY Id_Socia ASC")
+    # ------------------------
+    # MOSTRAR LISTA
+    # ------------------------
+    cur.execute("SELECT Id_Socia, Nombre, DUI FROM Socia ORDER BY Id_Socia ASC")
     data = cur.fetchall()
 
     if data:
-        df = pd.DataFrame(data)
         st.subheader("📋 Lista de socias")
-        st.dataframe(df, use_container_width=True)
-
+        st.dataframe(pd.DataFrame(data), use_container_width=True)
 
 
 
