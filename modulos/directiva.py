@@ -207,8 +207,9 @@ def pagina_asistencia():
         st.rerun()
 
 
+
 # ============================================================
-# REGISTRO DE NUEVAS SOCIAS — SOLO NÚMEROS, 9 Y 8 DÍGITOS
+# REGISTRO DE NUEVAS SOCIAS — 🎯 MEJORA APLICADA
 # ============================================================
 def pagina_registro_socias():
 
@@ -217,101 +218,42 @@ def pagina_registro_socias():
     con = obtener_conexion()
     cur = con.cursor(dictionary=True)
 
-    # ============================================================
-    # FORMULARIO REAL (AHORA STREAMLIT RECIBE LOS DATOS)
-    # ============================================================
-    with st.form("form_registro"):
+    nombre = st.text_input("Nombre completo de la socia:")
+    dui = st.text_input("Número de DUI (9 dígitos):", max_chars=9)
+    telefono = st.text_input("Número de teléfono (8 dígitos):", max_chars=8)
 
-        # ---------------------------
-        # CAMPO NOMBRE
-        # ---------------------------
-        nombre = st.text_input("Nombre completo de la socia:")
+    # Validación
+    if st.button("Registrar socia"):
 
-        # ---------------------------
-        # DUI (solo números, max 9)
-        # ---------------------------
-        st.markdown("**Número de DUI (9 dígitos):**")
-        dui_html = st.components.v1.html("""
-            <input id="dui_in" type="text" maxlength="9"
-                oninput="this.value=this.value.replace(/[^0-9]/g,'');"
-                placeholder="Solo números"
-                style="width:100%;padding:10px;border-radius:6px;font-size:16px;">
-            <input type="hidden" id="hidden_dui" name="hidden_dui">
-            <script>
-                const d = document.getElementById("dui_in");
-                const h = document.getElementById("hidden_dui");
-                d.addEventListener("input", () => h.value = d.value);
-            </script>
-        """, height=80)
-
-        dui = st.text_input("DUI recibido", key="dui_hidden", label_visibility="collapsed")
-
-        # ---------------------------
-        # TELÉFONO (solo números, max 8)
-        # ---------------------------
-        st.markdown("**Número de teléfono (8 dígitos):**")
-        tel_html = st.components.v1.html("""
-            <input id="tel_in" type="text" maxlength="8"
-                oninput="this.value=this.value.replace(/[^0-9]/g,'');"
-                placeholder="Solo números"
-                style="width:100%;padding:10px;border-radius:6px;font-size:16px;">
-            <input type="hidden" id="hidden_tel" name="hidden_tel">
-            <script>
-                const t = document.getElementById("tel_in");
-                const h2 = document.getElementById("hidden_tel");
-                t.addEventListener("input", () => h2.value = t.value);
-            </script>
-        """, height=80)
-
-        telefono = st.text_input("Tel recibido", key="tel_hidden", label_visibility="collapsed")
-
-        # ---------------------------
-        # BOTÓN DE ENVÍO
-        # ---------------------------
-        submit = st.form_submit_button("Registrar socia")
-
-    # ============================================================
-    # VALIDACIÓN AL ENVIAR EL FORMULARIO
-    # ============================================================
-    if submit:
-
-        dui = dui.strip()
-        telefono = telefono.strip()
-
-        if not nombre.strip():
+        if nombre.strip() == "":
             st.warning("Debe ingresar un nombre.")
             return
 
-        if len(dui) != 9:
-            st.warning("El DUI debe tener exactamente 9 dígitos.")
+        if not dui.isdigit() or len(dui) != 9:
+            st.warning("El DUI debe contener exactamente 9 dígitos numéricos.")
             return
 
-        if len(telefono) != 8:
-            st.warning("El teléfono debe tener exactamente 8 dígitos.")
+        if not telefono.isdigit() or len(telefono) != 8:
+            st.warning("El teléfono debe contener exactamente 8 dígitos numéricos.")
             return
 
-        # Guardar en DB
         cur.execute("""
-            INSERT INTO Socia (Nombre, DUI, Telefono)
-            VALUES (%s, %s, %s)
+            INSERT INTO Socia(Nombre, DUI, Telefono)
+            VALUES(%s, %s, %s)
         """, (nombre, dui, telefono))
         con.commit()
 
         st.success(f"Socia '{nombre}' registrada correctamente.")
         st.rerun()
 
-    # ============================================================
-    # LISTA DE SOCIAS
-    # ============================================================
-    cur.execute("SELECT Id_Socia, Nombre, DUI, Telefono FROM Socia ORDER BY Id_Socia ASC")
+    # Mostrar lista
+    cur.execute("SELECT Id_Socia, Nombre, DUI FROM Socia ORDER BY Id_Socia ASC")
     data = cur.fetchall()
 
     if data:
         df = pd.DataFrame(data)
         st.subheader("📋 Lista de socias")
         st.dataframe(df, use_container_width=True)
-
-
 
 
 
