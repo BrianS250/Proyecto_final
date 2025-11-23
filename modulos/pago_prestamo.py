@@ -32,7 +32,7 @@ def pago_prestamo():
     socias = cur.fetchall()
 
     dict_socias = {
-        f"{s['Id_Socia']} - {s['Nombre']}": s["Id_Socia"] 
+        f"{s['Id_Socia']} - {s['Nombre']}": s["Id_Socia"]
         for s in socias
     }
 
@@ -56,6 +56,7 @@ def pago_prestamo():
 
     id_prestamo = prestamo["Id_Préstamo"]
     saldo_pendiente = Decimal(prestamo["Saldo pendiente"])
+    interes_total = Decimal(prestamo.get("Interes_total", 0))
 
     # ============================================================
     # MOSTRAR INFORMACIÓN DEL PRÉSTAMO
@@ -63,7 +64,7 @@ def pago_prestamo():
     st.subheader("📄 Información del préstamo")
     st.write(f"**ID Préstamo:** {id_prestamo}")
     st.write(f"**Monto prestado:** ${prestamo['Monto prestado']}")
-    st.write(f"**Interés total:** ${prestamo['Interes_total']}")
+    st.write(f"**Interés total:** ${interes_total}")
     st.write(f"**Saldo pendiente:** ${saldo_pendiente}")
     st.write(f"**Cuotas:** {prestamo['Cuotas']}")
 
@@ -102,7 +103,7 @@ def pago_prestamo():
     # ============================================================
     if st.button("💾 Registrar pago"):
 
-        # Obtener datos de la cuota seleccionada
+        # Datos de la cuota seleccionada
         cur.execute("SELECT * FROM Cuotas_prestamo WHERE Id_Cuota=%s", (id_cuota,))
         cuota = cur.fetchone()
 
@@ -113,23 +114,40 @@ def pago_prestamo():
         fecha_pago_dt = date.fromisoformat(fecha_pago)
 
         # ============================================================
-        # 🚨 VALIDACIÓN ESTRICTA (NO pago anticipado, NO pago atrasado)
+        # VALIDAR FECHA EXACTA  ❗❗
         # ============================================================
         if fecha_pago_dt != fecha_programada_dt:
-            st.error(
-                f"❌ La fecha ingresada ({fecha_pago_dt}) NO coincide con la fecha programada "
-                f"de la cuota ({fecha_programada_dt}).\n\n"
-                f"👉 Solo se puede pagar en la **fecha exacta** programada."
-            )
+            st.error(f"❌ La fecha del pago NO coincide con la fecha programada ({fecha_programada}).")
             return
 
-        # Si la fecha coincide, NO hay mora
-        atraso = False
-
+        atraso = fecha_pago_dt > fecha_programada_dt
         monto_total = monto_cuota
 
         # ============================================================
-        # PAGO DE CUOTA → CAJA (SIEMPRE SUMA A CAJA)
+        # MULTA POR MORA
+        # ============================================================
+        if atraso and multa_mora > 0:
+
+            monto_total += multa_mora
+            st.warning(f"⚠ Pago atrasado: multa por mora de ${multa_mora}")
+
+            # Registrar multa en Multa
+            cur.execute("""
+                INSERT INTO Multa (Monto, Fecha_aplicacion, Estado, Id_Tipo_multa, Id_Socia)
+                VALUES (%s, %s, 'A pagar', 2, %s)
+            """, (multa_mora, fecha_pago, id_socia))
+
+            # Registrar multa como ingreso caja
+            id_caja_multa = obtener_o_crear_reunion(fecha_pago)
+            registrar_movimiento(
+                id_caja=id_caja_multa,
+                tipo="Ingreso",
+                categoria=f"Multa por mora (Préstamo #{id_prestamo})",
+                monto=float(multa_mora)
+            )
+
+        # ============================================================
+        # REGISTRAR INGRESO DE PAGO A CAJA
         # ============================================================
         id_caja = obtener_o_crear_reunion(fecha_pago)
 
