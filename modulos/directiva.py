@@ -87,7 +87,7 @@ def interfaz_directiva():
         st.error(f"⚠ Error al generar reporte diario: {e}")
 
    
-    # ============================================
+       # ============================================
     # MENÚ LATERAL
     # ============================================
     menu = st.sidebar.radio(
@@ -135,7 +135,6 @@ def interfaz_directiva():
 
     elif menu == "Reglas internas":
         gestionar_reglas()
-
 
 
     # ============================================================
