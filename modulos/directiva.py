@@ -219,32 +219,30 @@ def pagina_registro_socias():
 
     nombre = st.text_input("Nombre completo de la socia:")
 
-    # --- DUI ---
-    dui_input = st.text_input("Número de DUI (9 dígitos):", max_chars=9)
+    # DUI: EXACTAMENTE 9 DÍGITOS — SOLO NÚMEROS
+    dui_num = st.number_input(
+        "Número de DUI (9 dígitos):",
+        min_value=0,
+        max_value=999999999,   # 9 dígitos
+        step=1,
+        format="%d"
+    )
 
-    # Filtrar solo números
-    dui = "".join([c for c in dui_input if c.isdigit()])
+    # Convertimos a string para validar longitud
+    dui = str(dui_num)
 
-    # Si el usuario intenta meter letras → limpiar inmediatamente
-    if dui != dui_input:
-        st.warning("⚠ Solo se permiten números y máximo 9 dígitos en el DUI.")
+    # TELÉFONO: EXACTAMENTE 8 DÍGITOS — SOLO NÚMEROS
+    telefono_num = st.number_input(
+        "Número de teléfono (8 dígitos):",
+        min_value=0,
+        max_value=99999999,  # 8 dígitos
+        step=1,
+        format="%d"
+    )
 
-    # Limitar longitud exacta
-    dui = dui[:9]
+    telefono = str(telefono_num)
 
-    # --- TELÉFONO ---
-    tel_input = st.text_input("Número de teléfono (8 dígitos):", max_chars=8)
-
-    telefono = "".join([c for c in tel_input if c.isdigit()])
-
-    if telefono != tel_input:
-        st.warning("⚠ Solo se permiten números y máximo 8 dígitos en el teléfono.")
-
-    telefono = telefono[:8]
-
-    # ==========================================
-    # BOTÓN GUARDAR
-    # ==========================================
+    # BOTÓN
     if st.button("Registrar socia"):
 
         if nombre.strip() == "":
@@ -252,11 +250,11 @@ def pagina_registro_socias():
             return
 
         if len(dui) != 9:
-            st.warning("El DUI debe contener exactamente 9 dígitos.")
+            st.warning("El DUI debe tener exactamente 9 dígitos.")
             return
 
         if len(telefono) != 8:
-            st.warning("El teléfono debe contener exactamente 8 dígitos.")
+            st.warning("El número de teléfono debe tener exactamente 8 dígitos.")
             return
 
         cur.execute("""
@@ -268,13 +266,14 @@ def pagina_registro_socias():
         st.success(f"Socia '{nombre}' registrada correctamente.")
         st.rerun()
 
-    # Mostrar lista de socias
+    # Lista de socias
     cur.execute("SELECT Id_Socia, Nombre, DUI FROM Socia ORDER BY Id_Socia ASC")
     data = cur.fetchall()
 
     if data:
+        df = pd.DataFrame(data)
         st.subheader("📋 Lista de socias")
-        st.dataframe(pd.DataFrame(data), use_container_width=True)
+        st.dataframe(df, use_container_width=True)
 
 
 
