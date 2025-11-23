@@ -14,7 +14,7 @@ def autorizar_prestamo():
     st.write("Complete la información para autorizar un nuevo préstamo.")
 
     con = obtener_conexion()
-    cursor = con.cursor()
+    cursor = con.cursor(dictionary=True)
 
     # ======================================================
     # OBTENER SOCIAS
@@ -26,7 +26,7 @@ def autorizar_prestamo():
         st.warning("⚠ No hay socias registradas.")
         return
 
-    lista_socias = {f"{id} - {nombre}": id for (id, nombre) in socias}
+    lista_socias = {f"{s['Id_Socia']} - {s['Nombre']}": s["Id_Socia"] for s in socias}
 
     # ======================================================
     # FORMULARIO
@@ -52,6 +52,27 @@ def autorizar_prestamo():
     # ======================================================
     if enviar:
 
+        # ======================================================
+        # VALIDAR AHORRO DE LA SOCIA
+        # ======================================================
+        cursor.execute("""
+            SELECT `Saldo acumulado`
+            FROM Ahorro
+            WHERE Id_Socia=%s
+            ORDER BY Id_Ahorro DESC
+            LIMIT 1
+        """, (id_socia,))
+
+        registro_ahorro = cursor.fetchone()
+        ahorro_total = float(registro_ahorro["Saldo acumulado"]) if registro_ahorro else 0.0
+
+        if monto > ahorro_total:
+            st.error(f"❌ La socia tiene solamente ${ahorro_total} ahorrados. No puede solicitar ${monto}.")
+            return
+
+        # ======================================================
+        # VALIDAR CAJA
+        # ======================================================
         cursor.execute("SELECT Id_Caja, Saldo_actual FROM Caja ORDER BY Id_Caja DESC LIMIT 1")
         caja = cursor.fetchone()
 
@@ -59,18 +80,20 @@ def autorizar_prestamo():
             st.error("❌ No existe caja activa.")
             return
 
-        id_caja, saldo_actual = caja
+        id_caja = caja["Id_Caja"]
+        saldo_actual = caja["Saldo_actual"]
 
         if monto > saldo_actual:
-            st.error(f"❌ Fondos insuficientes. Saldo disponible: ${saldo_actual}")
+            st.error(f"❌ Fondos insuficientes en caja. Saldo disponible: ${saldo_actual}")
             return
 
         saldo_pendiente = monto
 
+        # ======================================================
+        # REGISTRAR TODO
+        # ======================================================
         try:
-            # --------------------------------------------------
-            # 1. REGISTRAR PRÉSTAMO (CORREGIDO)
-            # --------------------------------------------------
+            # 1. PRÉSTAMO
             cursor.execute("""
                 INSERT INTO Prestamo(
                     `Fecha del préstamo`, `Monto prestado`, `Tasa de interes`,
@@ -92,9 +115,7 @@ def autorizar_prestamo():
                 id_caja
             ))
 
-            # --------------------------------------------------
-            # 2. REGISTRAR EGRESO EN CAJA
-            # --------------------------------------------------
+            # 2. EGRESO EN CAJA
             cursor.execute("""
                 INSERT INTO Caja(Concepto, Monto, Saldo_actual, Id_Grupo, Id_Tipo_movimiento, Fecha)
                 VALUES (%s, %s, %s, 1, 3, CURRENT_DATE())
