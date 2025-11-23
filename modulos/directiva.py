@@ -124,7 +124,52 @@ def interfaz_directiva():
     elif menu == "Cierre de ciclo":
         cierre_ciclo()
     elif menu == "Reporte de caja":
-        reporte_caja()
+    reporte_caja()
+
+    # ============================================================
+    # 🔵 RESUMEN DEL CICLO (Conectado a Reglas Internas)
+    # ============================================================
+    from modulos.reglas_utils import obtener_reglas
+    from modulos.conexion import obtener_conexion
+
+    reglas = obtener_reglas()
+
+    if reglas:
+        fecha_inicio_ciclo = reglas.get("fecha_inicio_ciclo", None)
+
+        if fecha_inicio_ciclo:
+
+            st.markdown("---")
+            st.subheader("📊 Resumen del ciclo (desde fecha definida en reglas)")
+
+            con = obtener_conexion()
+            cur = con.cursor(dictionary=True)
+
+            cur.execute("""
+                SELECT 
+                    IFNULL(SUM(ingresos),0) AS total_ingresos,
+                    IFNULL(SUM(egresos),0) AS total_egresos
+                FROM caja_reunion
+                WHERE fecha >= %s
+            """, (fecha_inicio_ciclo,))
+
+            tot = cur.fetchone()
+
+            total_ingresos_ciclo = float(tot["total_ingresos"])
+            total_egresos_ciclo = float(tot["total_egresos"])
+            balance = total_ingresos_ciclo - total_egresos_ciclo
+
+            st.write(f"📥 **Ingresos acumulados:** ${total_ingresos_ciclo:.2f}")
+            st.write(f"📤 **Egresos acumulados:** ${total_egresos_ciclo:.2f}")
+            st.write(f"💼 **Balance del ciclo:** ${balance:.2f}")
+
+            cur.close()
+            con.close()
+        else:
+            st.info("⚠ No está definida la fecha de inicio del ciclo en Reglas Internas.")
+    else:
+        st.info("⚠ Debes registrar reglas internas primero.")
+
     elif menu == "Reglas internas":
         gestionar_reglas()
 
