@@ -1,33 +1,37 @@
 import streamlit as st 
 from datetime import date
+from decimal import Decimal
+
 from modulos.conexion import obtener_conexion
 from modulos.caja import obtener_o_crear_reunion, registrar_movimiento
-
-# 🔗 NUEVO — para enlazar ahorro mínimo desde reglas internas
 from modulos.reglas_utils import obtener_reglas
 
 
+
+# ============================================================
+# FUNCIÓN PRINCIPAL — REGISTRO DE AHORRO
+# ============================================================
 def ahorro():
 
     st.header("💰 Registro de Ahorros")
 
-    # ==========================================================
-    # 🔗 LEER REGLAS INTERNAS (ahorro mínimo)
-    # ==========================================================
+    # ============================================================
+    # 1️⃣ LEER REGLAS INTERNAS (ahorro mínimo)
+    # ============================================================
     reglas = obtener_reglas()
 
     if not reglas:
         st.error("⚠ No existen reglas internas registradas. Regístrelas primero.")
         return
 
-    ahorro_minimo = float(reglas["ahorro_minimo"])   # ← valor tomado del reglamento
+    ahorro_minimo = float(reglas.get("ahorro_minimo", 0))
 
+    # ============================================================
+    # 2️⃣ SOCIAS
+    # ============================================================
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
 
-    # ---------------------------------------------------------
-    # 1️⃣ SOCIAS
-    # ---------------------------------------------------------
     cursor.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
     socias = cursor.fetchall()
 
@@ -40,9 +44,9 @@ def ahorro():
     socia_sel = st.selectbox("👩 Seleccione la socia:", dict_socias.keys())
     id_socia = dict_socias[socia_sel]
 
-    # ---------------------------------------------------------
-    # 2️⃣ HISTORIAL DE APORTES
-    # ---------------------------------------------------------
+    # ============================================================
+    # 3️⃣ HISTORIAL DE APORTES
+    # ============================================================
     cursor.execute("""
         SELECT 
             Id_Ahorro,
@@ -55,35 +59,34 @@ def ahorro():
         WHERE Id_Socia = %s
         ORDER BY Id_Ahorro DESC
     """, (id_socia,))
-
     aportes = cursor.fetchall()
 
     st.subheader("📄 Historial de aportes")
+
     if aportes:
-        for ap in aportes:
-            st.write(f"""
-                **ID:** {ap['Id_Ahorro']}  
-                **Fecha:** {ap['Fecha del aporte']}  
-                **Monto:** ${ap['Monto del aporte']}  
-                **Tipo:** {ap['Tipo de aporte']}  
-                **Comprobante:** {ap['Comprobante digital']}  
-                **Saldo acumulado:** ${ap['Saldo acumulado']}  
-            """)
+        import pandas as pd
+
+        df = pd.DataFrame(aportes)
+        st.dataframe(df, use_container_width=True)
+
+        ultimo_saldo = aportes[0]["Saldo acumulado"]
+        st.success(f"💵 **Saldo actual acumulado:** ${ultimo_saldo}")
     else:
         st.info("Esta socia aún no tiene aportes registrados.")
+        ultimo_saldo = 0
 
-    # ---------------------------------------------------------
-    # 3️⃣ NUEVO APORTE
-    # ---------------------------------------------------------
+    # ============================================================
+    # 4️⃣ NUEVO APORTE
+    # ============================================================
     st.markdown("---")
     st.header("🧾 Registrar nuevo aporte")
 
     fecha_aporte_raw = st.date_input("📅 Fecha del aporte", value=date.today())
     fecha_aporte = fecha_aporte_raw.strftime("%Y-%m-%d")
 
-    # ---------------------------------------------------------
-    # 🔗 APLICAR AHORRO MÍNIMO SOLO A ORDINARIO
-    # ---------------------------------------------------------
+    # ------------------------------------------------------------
+    # Tipo de aporte
+    # ------------------------------------------------------------
     tipo = st.selectbox("📌 Tipo de aporte", ["Ordinario", "Extraordinario"])
 
     if tipo == "Ordinario":
@@ -103,31 +106,29 @@ def ahorro():
         )
         st.caption("Los aportes extraordinarios no tienen un mínimo definido.")
 
-    comprobante = st.text_input("📎 Comprobante digital")
+    comprobante = st.text_input("📎 Comprobante digital (opcional)")
 
+    # ============================================================
+    # BOTÓN PARA REGISTRAR
+    # ============================================================
     if st.button("💾 Registrar aporte"):
 
         try:
+            # ------------------------------------------
+            # Sumar al saldo anterior
+            # ------------------------------------------
+            saldo_anterior = Decimal(str(ultimo_saldo))
+            monto_decimal = Decimal(str(monto))
 
-            # ---------------------------------------------------------
-            # 4️⃣ OBTENER SALDO ANTERIOR
-            # ---------------------------------------------------------
-            cursor.execute("""
-                SELECT `Saldo acumulado`
-                FROM Ahorro
-                WHERE Id_Socia = %s
-                ORDER BY Id_Ahorro DESC
-                LIMIT 1
-            """, (id_socia,))
+            if monto_decimal <= 0:
+                st.error("❌ El monto debe ser mayor que 0.")
+                return
 
-            row = cursor.fetchone()
-            saldo_anterior = row["Saldo acumulado"] if row else 0
+            nuevo_saldo = saldo_anterior + monto_decimal
 
-            nuevo_saldo = saldo_anterior + monto
-
-            # ---------------------------------------------------------
-            # 5️⃣ INSERTAR EN TABLA AHORRO
-            # ---------------------------------------------------------
+            # ------------------------------------------
+            # Registrar aporte
+            # ------------------------------------------
             cursor.execute("""
                 INSERT INTO Ahorro
                 (`Fecha del aporte`, `Monto del aporte`, `Tipo de aporte`,
@@ -135,23 +136,23 @@ def ahorro():
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (
                 fecha_aporte,
-                monto,
+                monto_decimal,
                 tipo,
-                comprobante,
+                comprobante if comprobante else "---",
                 nuevo_saldo,
                 id_socia
             ))
 
-            # ---------------------------------------------------------
-            # 6️⃣ REGISTRAR EN CAJA
-            # ---------------------------------------------------------
+            # ------------------------------------------
+            # Caja única → registrar ingreso
+            # ------------------------------------------
             id_caja = obtener_o_crear_reunion(fecha_aporte)
 
             registrar_movimiento(
-                id_caja,
-                "Ingreso",
-                f"Ahorro – Socia {id_socia}",
-                monto
+                id_caja=id_caja,
+                tipo="Ingreso",
+                categoria=f"Ahorro – {socia_sel}",
+                monto=float(monto_decimal)
             )
 
             con.commit()
