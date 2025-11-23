@@ -223,29 +223,32 @@ def pagina_registro_socias():
     nombre = st.text_input("Nombre completo de la socia:")
 
     # ---------------------------
-    # CAMPO DUI (bloquea letras)
+    # CAMPO DUI (solo números)
     # ---------------------------
     dui = st.text_input(
         "Número de DUI (9 dígitos):",
         max_chars=9,
         placeholder="Solo números",
-        key="dui",
+        key="dui"
     )
 
-    # BLOQUEO REAL DE LETRAS
+    # BLOQUEO REAL DE LETRAS — DUI
     st.html("""
     <script>
-    const duiInput = window.parent.document.querySelector('input[key="dui"]');
-    if (duiInput) {
-        duiInput.addEventListener('input', function() {
-            this.value = this.value.replace(/[^0-9]/g, '');
-        });
-    }
+    const labels = window.parent.document.querySelectorAll('label');
+    labels.forEach(label => {
+        if (label.innerText.includes("Número de DUI")) {
+            const input = label.parentElement.querySelector('input');
+            input.addEventListener('input', function() {
+                this.value = this.value.replace(/[^0-9]/g, '');
+            });
+        }
+    });
     </script>
     """)
 
     # ---------------------------
-    # CAMPO TELÉFONO (bloquea letras)
+    # CAMPO TELÉFONO (solo números)
     # ---------------------------
     telefono = st.text_input(
         "Número de teléfono (8 dígitos):",
@@ -254,15 +257,18 @@ def pagina_registro_socias():
         key="tel"
     )
 
-    # BLOQUEO REAL DE LETRAS
+    # BLOQUEO REAL DE LETRAS — TELÉFONO
     st.html("""
     <script>
-    const telInput = window.parent.document.querySelector('input[key="tel"]');
-    if (telInput) {
-        telInput.addEventListener('input', function() {
-            this.value = this.value.replace(/[^0-9]/g, '');
-        });
-    }
+    const labels2 = window.parent.document.querySelectorAll('label');
+    labels2.forEach(label => {
+        if (label.innerText.includes("Número de teléfono")) {
+            const input = label.parentElement.querySelector('input');
+            input.addEventListener('input', function() {
+                this.value = this.value.replace(/[^0-9]/g, '');
+            });
+        }
+    });
     </script>
     """)
 
@@ -302,6 +308,7 @@ def pagina_registro_socias():
         df = pd.DataFrame(data)
         st.subheader("📋 Lista de socias")
         st.dataframe(df, use_container_width=True)
+
 
 
 
