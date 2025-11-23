@@ -22,9 +22,8 @@ def autorizar_prestamo():
         st.error("⚠ No existen reglas internas registradas.")
         return
 
-    # REGLAS CORRECTAS
-    prestamo_maximo = float(reglas.get("prestamo_maximo", 0))  # debe ser 100 en BD
-    interes_por_10 = float(reglas.get("interes_por_10", 6))    # interés fijo 6%
+    prestamo_maximo = float(reglas.get("prestamo_maximo", 0))      # debe ser 100 en reglas
+    interes_por_10 = float(reglas.get("interes_por_10", 6))        # interés fijo 6%
     plazo_maximo = int(reglas.get("plazo_maximo", 12))
 
     # ============================================================
@@ -71,30 +70,44 @@ def autorizar_prestamo():
         row = cursor.fetchone()
         ahorro_total = Decimal(row["Saldo acumulado"]) if row else Decimal("0.00")
 
-        # ============================================================
-        # Nuevo límite real del préstamo
-        # ============================================================
+        # Límite real del préstamo
         limite_real = float(min(ahorro_total, Decimal(prestamo_maximo)))
 
-        monto = st.number_input(
+        # ============================================================
+        # Monto prestado — BLOQUEO TOTAL
+        # ============================================================
+        monto_str = st.text_input(
             "💵 Monto prestado ($):",
-            min_value=1.0,
-            max_value=limite_real,   # ← límite real corregido
-            step=1.0,
-            help=f"Monto máximo permitido según ahorro y reglas: ${limite_real}"
+            value="",
+            placeholder=f"Máximo permitido: ${limite_real}"
         )
 
+        # Bloquear letras y símbolos
+        if monto_str and not monto_str.isdigit():
+            st.error("❌ Solo se permiten números.")
+            st.stop()
+
+        monto = float(monto_str) if monto_str else 0.0
+
+        # No permitir exceder el máximo real
+        if monto > limite_real:
+            st.error(f"❌ El monto máximo permitido es: ${limite_real}.")
+            st.stop()
+
         # ============================================================
-        # Interés FIJO según reglas internas (6%)
+        # Interés FIJO según reglas internas (6%) — NO EDITABLE
         # ============================================================
         tasa = st.number_input(
             "📈 Interés (%)",
             min_value=0.0,
             max_value=100.0,
-            value=interes_por_10,   # ← SIEMPRE 6%
-            disabled=True           # ← NO EDITABLE
+            value=interes_por_10,
+            disabled=True
         )
 
+        # ============================================================
+        # Plazo y cuotas
+        # ============================================================
         plazo = st.number_input(
             "🗓 Plazo (meses):",
             min_value=1,
