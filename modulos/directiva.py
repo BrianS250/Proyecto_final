@@ -208,7 +208,7 @@ def pagina_asistencia():
 
 
 # ============================================================
-# REGISTRO DE NUEVAS SOCIAS — ✔ Validación de DUI y Teléfono
+# REGISTRO DE NUEVAS SOCIAS — 🎯 CORREGIDO
 # ============================================================
 def pagina_registro_socias():
 
@@ -218,21 +218,34 @@ def pagina_registro_socias():
     cur = con.cursor(dictionary=True)
 
     nombre = st.text_input("Nombre completo de la socia:")
-    dui = st.text_input("Número de DUI (9 dígitos):", max_chars=9)
-    telefono = st.text_input("Número de teléfono (8 dígitos):", max_chars=8)
 
+    # --- DUI Y TELÉFONO SIN LETRAS ---
+    dui_raw = st.text_input("Número de DUI (9 dígitos):", max_chars=9)
+    telefono_raw = st.text_input("Número de teléfono (8 dígitos):", max_chars=8)
+
+    # Filtro para permitir solo números mientras escribe
+    dui = "".join([c for c in dui_raw if c.isdigit()])[:9]
+    telefono = "".join([c for c in telefono_raw if c.isdigit()])[:8]
+
+    # Mensajes si detecta letras
+    if dui != dui_raw:
+        st.warning("⚠ Solo se permiten números en el DUI.")
+    if telefono != telefono_raw:
+        st.warning("⚠ Solo se permiten números en el teléfono.")
+
+    # Botón registrar
     if st.button("Registrar socia"):
 
         if nombre.strip() == "":
             st.warning("Debe ingresar un nombre.")
             return
 
-        if not dui.isdigit() or len(dui) != 9:
-            st.warning("El DUI debe contener exactamente **9 dígitos numéricos**.")
+        if len(dui) != 9:
+            st.warning("El DUI debe contener exactamente 9 dígitos.")
             return
 
-        if not telefono.isdigit() or len(telefono) != 8:
-            st.warning("El teléfono debe contener exactamente **8 dígitos numéricos**.")
+        if len(telefono) != 8:
+            st.warning("El teléfono debe contener exactamente 8 dígitos.")
             return
 
         cur.execute("""
@@ -244,6 +257,7 @@ def pagina_registro_socias():
         st.success(f"Socia '{nombre}' registrada correctamente.")
         st.rerun()
 
+    # Mostrar lista
     cur.execute("SELECT Id_Socia, Nombre, DUI FROM Socia ORDER BY Id_Socia ASC")
     data = cur.fetchall()
 
