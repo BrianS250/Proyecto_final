@@ -289,7 +289,7 @@ def pagina_multas():
     id_tipo = dict_tipos[tipo_sel]
 
     # -----------------------------------------------------------
-    # Monto según tipo (Regla automática)
+    # Monto según tipo de multa
     # -----------------------------------------------------------
     tipo_lower = tipo_sel.lower()
     if "inasistencia" in tipo_lower:
@@ -297,7 +297,7 @@ def pagina_multas():
     elif "mora" in tipo_lower:
         monto_def = 3.00
     else:
-        monto_def = 0.00  # por si hay otros tipos
+        monto_def = 0.00  # si hubiera otros tipos
 
     monto = st.number_input("Monto ($):", min_value=0.00, value=monto_def, step=0.25)
     fecha_raw = st.date_input("Fecha:", date.today())
@@ -318,12 +318,12 @@ def pagina_multas():
         st.success("Multa registrada correctamente.")
         st.rerun()
 
-    # -----------------------------------------------------------
-    # LISTADO Y FILTROS
-    # -----------------------------------------------------------
     st.markdown("---")
     st.subheader("📋 Multas registradas")
 
+    # -----------------------------------------------------------
+    # FILTROS - socia, estado, fechas
+    # -----------------------------------------------------------
     filtro_socia = st.selectbox("Filtrar por socia:", ["Todas"] + list(dict_socias.keys()))
     filtro_estado = st.selectbox("Estado:", ["Todos", "A pagar", "Pagada"])
 
@@ -353,13 +353,16 @@ def pagina_multas():
         query += " AND M.Estado = %s"
         params.append(filtro_estado)
 
-    query += " ORDER BY M.Id_Multa DESC"
+    # -----------------------------------------------------------
+    # ORDENAR POR FECHA APLICADA (NO POR ID)
+    # -----------------------------------------------------------
+    query += " ORDER BY M.Fecha_aplicacion DESC, M.Id_Multa DESC"
 
     cur.execute(query, params)
     multas = cur.fetchall()
 
     # -----------------------------------------------------------
-    # MENSAJE SI NO HAY MULTAS
+    # MENSAJE SI NO HAY MULTAS SEGÚN FILTRO
     # -----------------------------------------------------------
     if not multas:
         if filtro_socia != "Todas" and filtro_estado == "A pagar":
@@ -379,7 +382,7 @@ def pagina_multas():
         col2.write(m["Socia"])
         col3.write(m["Tipo de multa"])
 
-        # Montos fijos automáticos
+        # Monto correcto por tipo
         tipo_m = m["Tipo de multa"].lower()
         if "inasistencia" in tipo_m:
             monto_f = 1.00
@@ -389,14 +392,12 @@ def pagina_multas():
             monto_f = float(m["Monto"])
 
         col4.write(f"${monto_f:.2f}")
-
         nuevo_estado = col5.selectbox(
             " ",
             ["A pagar", "Pagada"],
             index=0 if m["Estado"] == "A pagar" else 1,
             key=f"multa_{m['Id_Multa']}"
         )
-
         col6.write(str(m["Fecha_aplicacion"]))
 
         # -----------------------------------------------------------
@@ -406,10 +407,9 @@ def pagina_multas():
 
             estado_anterior = m["Estado"]
 
-            # Registrar ingreso en caja si pasa a Pagada
+            # Registrar ingreso en caja cuando cambia a pagada
             if estado_anterior == "A pagar" and nuevo_estado == "Pagada":
 
-                # Buscar reunión de ese día
                 cur.execute("SELECT id_caja FROM caja_reunion WHERE fecha = %s", (m["Fecha_aplicacion"],))
                 reunion = cur.fetchone()
 
