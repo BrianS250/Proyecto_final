@@ -208,87 +208,96 @@ def pagina_asistencia():
 
 
 # ============================================================
-# REGISTRO DE NUEVAS SOCIAS — SOLO NÚMEROS Y LÍMITES EXACTOS
+# REGISTRAR NUEVAS SOCIAS
 # ============================================================
-def pagina_registro_socias():
+def registrar_socia():
 
-    st.header("👩‍🦰 Registrar nuevas socias")
+    st.title("🤱 Registrar nuevas socias")
 
     con = obtener_conexion()
-    cur = con.cursor(dictionary=True)
+    cursor = con.cursor(dictionary=True)
 
-    # ------------------------
-    # NOMBRE
-    # ------------------------
-    nombre = st.text_input("Nombre completo de la socia:")
+    # -----------------------------------------------------------
+    # FORMULARIO
+    # -----------------------------------------------------------
 
-    # ------------------------
-    # DUI (solo números, máximo 9)
-    # ------------------------
-    dui_raw = st.text_input("Número de DUI (9 dígitos):")
+    nombre = st.text_input(
+        "Nombre completo de la socia:"
+    )
 
-    # Filtro EN VIVO: elimina letras y caracteres no numéricos
-    dui = "".join([c for c in dui_raw if c.isdigit()])[:9]
+    dui = st.text_input(
+        "Número de DUI (9 dígitos):",
+        value="",
+        max_chars=9,
+        placeholder="XXXXXXXXX",
+        key="dui_input",
+        kwargs={
+            "inputmode": "numeric",
+            "pattern": "[0-9]{0,9}",
+            "maxlength": "9"
+        }
+    )
 
-    # Sobrescribir input mostrado
-    if dui_raw != dui:
-        st.warning("⚠ Solo se permiten números y máximo 9 dígitos en el DUI.")
-        st.session_state["dui_corr"] = dui
-        st.experimental_rerun()
+    telefono = st.text_input(
+        "Número de teléfono (8 dígitos):",
+        value="",
+        max_chars=8,
+        placeholder="XXXXXXXX",
+        key="telefono_input",
+        kwargs={
+            "inputmode": "numeric",
+            "pattern": "[0-9]{0,8}",
+            "maxlength": "8"
+        }
+    )
 
-    dui = st.session_state.get("dui_corr", dui)
+    distrito = st.text_input("Distrito asignado:")
 
-    # ------------------------
-    # TELÉFONO (solo números, máximo 8)
-    # ------------------------
-    tel_raw = st.text_input("Número de teléfono (8 dígitos):")
+    usuario = st.text_input("Usuario:")
+    contrasena = st.text_input("Contraseña:", type="password")
+    confirmar = st.text_input("Confirmar contraseña:", type="password")
 
-    telefono = "".join([c for c in tel_raw if c.isdigit()])[:8]
+    st.info("⚠️ Solo se permiten números y máximo 9 en DUI / 8 en Teléfono.")
 
-    if tel_raw != telefono:
-        st.warning("⚠ Solo se permiten números y máximo 8 dígitos en el teléfono.")
-        st.session_state["tel_corr"] = telefono
-        st.experimental_rerun()
-
-    telefono = st.session_state.get("tel_corr", telefono)
-
-    # ------------------------
-    # BOTÓN REGISTRAR
-    # ------------------------
+    # -----------------------------------------------------------
+    # VALIDACIÓN
+    # -----------------------------------------------------------
     if st.button("Registrar socia"):
 
-        if nombre.strip() == "":
-            st.error("Debe ingresar un nombre.")
+        if not nombre or not dui or not telefono or not distrito or not usuario or not contrasena:
+            st.error("❌ Todos los campos son obligatorios.")
             return
 
-        if len(dui) != 9:
-            st.error("El DUI debe tener exactamente 9 números.")
+        if contrasena != confirmar:
+            st.error("❌ Las contraseñas no coinciden.")
             return
 
-        if len(telefono) != 8:
-            st.error("El teléfono debe tener exactamente 8 números.")
+        if not dui.isnumeric() or len(dui) != 9:
+            st.error("❌ El DUI debe tener exactamente 9 números.")
             return
 
-        cur.execute("""
-            INSERT INTO Socia(Nombre, DUI, Telefono)
-            VALUES(%s, %s, %s)
-        """, (nombre, dui, telefono))
-        con.commit()
+        if not telefono.isnumeric() or len(telefono) != 8:
+            st.error("❌ El teléfono debe tener exactamente 8 números.")
+            return
 
-        st.success(f"Socia '{nombre}' registrada correctamente.")
-        st.session_state.pop("dui_corr", None)
-        st.session_state.pop("tel_corr", None)
-        st.experimental_rerun()
+        # -----------------------------------------------------------
+        # GUARDAR EN LA BASE DE DATOS
+        # -----------------------------------------------------------
+        try:
+            cursor.execute("""
+                INSERT INTO socia (Nombre, DUI, Telefono, Distrito, Usuario, Contrasena)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (nombre, dui, telefono, distrito, usuario, contrasena))
 
-    # ------------------------
-    # MOSTRAR LISTA
-    # ------------------------
-    cur.execute("SELECT Id_Socia, Nombre, DUI FROM Socia ORDER BY Id_Socia ASC")
-    data = cur.fetchall()
+            con.commit()
+            st.success("✅ Socia registrada correctamente.")
 
-    if data:
-        st.subheader("📋 Lista de socias")
-        st.dataframe(pd.DataFrame(data), use_container_width=True)
+        except Exception as e:
+            st.error(f"❌ Error al registrar: {e}")
+
+        finally:
+            cursor.close()
+            con.close()
 
 
 
