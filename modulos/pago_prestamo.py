@@ -58,12 +58,19 @@ def pago_prestamo():
     saldo_pendiente = Decimal(prestamo["Saldo pendiente"])
 
     # ============================================================
+    # CALCULAR INTERÉS TOTAL REAL (NO EXISTE EN LA TABLA)
+    # ============================================================
+    monto_prestado = Decimal(prestamo["Monto prestado"])
+    tasa = Decimal(prestamo["Tasa de interes"])
+    interes_total = round(monto_prestado * tasa / Decimal(100), 2)
+
+    # ============================================================
     # MOSTRAR INFORMACIÓN DEL PRÉSTAMO
     # ============================================================
     st.subheader("📄 Información del préstamo")
     st.write(f"**ID Préstamo:** {id_prestamo}")
-    st.write(f"**Monto prestado:** ${prestamo['Monto prestado']}")
-    st.write(f"**Interés total:** ${prestamo['Interes_total']}")
+    st.write(f"**Monto prestado:** ${monto_prestado}")
+    st.write(f"📈 **Interés total:** ${interes_total}")
     st.write(f"**Saldo pendiente:** ${saldo_pendiente}")
     st.write(f"**Cuotas:** {prestamo['Cuotas']}")
 
