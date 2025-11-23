@@ -2,11 +2,13 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 from decimal import Decimal
+import matplotlib.pyplot as plt
+import os
 
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
 
 from modulos.conexion import obtener_conexion
 from modulos.caja import obtener_o_crear_reunion, obtener_saldo_actual
@@ -14,7 +16,7 @@ from modulos.reglas_utils import obtener_reglas
 
 
 # ============================================================
-# 📊 REPORTE DE CAJA COMPLETO + CIERRE DE DÍA + GRÁFICAS PDF
+# 📊 REPORTE DE CAJA COMPLETO + GRAFICAS + PDF
 # ============================================================
 def reporte_caja():
 
@@ -24,7 +26,7 @@ def reporte_caja():
     cur = con.cursor(dictionary=True)
 
     # ============================================================
-    # 1️⃣ LEER REGLAS DEL CICLO
+    # 1️⃣ CICLO – REGLAS INTERNAS
     # ============================================================
     reglas = obtener_reglas()
     if not reglas:
@@ -33,34 +35,28 @@ def reporte_caja():
 
     ciclo_inicio = reglas.get("ciclo_inicio")
     if not ciclo_inicio:
-        st.error("⚠ Falta la fecha de inicio del ciclo.")
+        st.error("⚠ Falta la fecha de inicio del ciclo en reglas internas.")
         return
 
-    # crear reunión si no existe hoy
     hoy = date.today().strftime("%Y-%m-%d")
     obtener_o_crear_reunion(hoy)
 
     # ============================================================
-    # 2️⃣ LISTA DE FECHAS
+    # 2️⃣ LISTA DE FECHAS DISPONIBLES
     # ============================================================
     cur.execute("SELECT fecha FROM caja_reunion ORDER BY fecha DESC")
-    fechas_raw = cur.fetchall()
+    fechas = [f["fecha"] for f in cur.fetchall()]
 
-    if not fechas_raw:
-        st.info("Aún no hay reuniones registradas.")
-        return
-
-    fechas = [f["fecha"] for f in fechas_raw]
     fecha_sel = st.selectbox("📅 Seleccione la fecha:", fechas)
 
     # ============================================================
-    # 3️⃣ LEER RESUMEN DEL DÍA
+    # 3️⃣ RESUMEN DEL DÍA
     # ============================================================
     cur.execute("SELECT * FROM caja_reunion WHERE fecha = %s", (fecha_sel,))
     reunion = cur.fetchone()
 
     if not reunion:
-        st.warning("⚠ No hay datos para esta fecha.")
+        st.warning("No existe información de caja para esta fecha.")
         return
 
     id_caja = reunion["id_caja"]
@@ -76,8 +72,7 @@ def reporte_caja():
     c1.metric("Saldo Inicial", f"${saldo_inicial:.2f}")
     c2.metric("Ingresos", f"${ingresos:.2f}")
     c3.metric("Egresos", f"${egresos:.2f}")
-
-    st.metric("💰 Saldo Final del Día", f"${saldo_final:.2f}")
+    st.metric("💰 Saldo Final", f"${saldo_final:.2f}")
 
     st.markdown("---")
 
@@ -92,23 +87,21 @@ def reporte_caja():
         WHERE id_caja = %s
         ORDER BY id_mov ASC
     """, (id_caja,))
-
     movimientos = cur.fetchall()
 
     if movimientos:
-        df_mov = pd.DataFrame(movimientos)
-        st.dataframe(df_mov, hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(movimientos), hide_index=True, use_container_width=True)
     else:
-        st.info("No hay movimientos registrados para este día.")
+        st.info("No hay movimientos registrados en esta reunión.")
 
     st.markdown("---")
 
     # ============================================================
-    # 5️⃣ CIERRE DEL DÍA
+    # 5️⃣ CIERRE DE DÍA
     # ============================================================
     st.subheader("🧾 Cierre del día")
 
-    if dia_cerrado:
+    if dia_cerrado == 1:
         st.success("🔒 Este día ya está CERRADO.")
     else:
         st.warning("⚠ Este día NO está cerrado.")
@@ -118,12 +111,12 @@ def reporte_caja():
             saldo_real = float(obtener_saldo_actual())
             saldo_calc = saldo_inicial + ingresos - egresos
 
-            if abs(saldo_calc - saldo_real) > 0.01:
+            if abs(saldo_real - saldo_calc) > 0.01:
                 st.error(
                     f"❌ No se puede cerrar el día.\n\n"
                     f"Saldo calculado: ${saldo_calc:.2f}\n"
                     f"Saldo real: ${saldo_real:.2f}\n"
-                    f"Los valores no coinciden."
+                    "Los valores no coinciden."
                 )
                 return
 
@@ -132,7 +125,6 @@ def reporte_caja():
                 SET dia_cerrado = 1, saldo_final = %s
                 WHERE id_caja = %s
             """, (saldo_real, id_caja))
-
             con.commit()
             st.success("🔒 Día cerrado correctamente.")
             st.experimental_rerun()
@@ -140,37 +132,98 @@ def reporte_caja():
     st.markdown("---")
 
     # ============================================================
-    # 6️⃣ GRÁFICAS POR FECHA (3 GRÁFICAS SEPARADAS)
+    # 6️⃣ RESUMEN DEL CICLO
     # ============================================================
-    st.subheader("📈 Gráficas del día")
+    st.subheader("📊 Resumen general del ciclo")
 
-    graf_df = pd.DataFrame({
-        "Tipo": ["Ingresos", "Egresos", "Balance"],
-        "Monto": [ingresos, egresos, ingresos - egresos]
-    })
+    cur.execute("""
+        SELECT 
+            IFNULL(SUM(CASE WHEN tipo='Ingreso' THEN monto END),0) AS total_ingresos,
+            IFNULL(SUM(CASE WHEN tipo='Egreso' THEN monto END),0) AS total_egresos
+        FROM caja_movimientos cm
+        JOIN caja_reunion cr ON cr.id_caja = cm.id_caja
+        WHERE cr.fecha >= %s
+    """, (ciclo_inicio,))
+    tot = cur.fetchone()
 
-    # ---- gráfica ingresos ----
-    st.write("📥 **Ingresos del día**")
-    st.bar_chart(pd.DataFrame({"Ingresos": [ingresos]}))
+    total_ingresos = float(tot["total_ingresos"])
+    total_egresos = float(tot["total_egresos"])
+    balance = total_ingresos - total_egresos
 
-    # ---- gráfica egresos ----
-    st.write("📤 **Egresos del día**")
-    st.bar_chart(pd.DataFrame({"Egresos": [egresos]}))
-
-    # ---- gráfica balance ----
-    st.write("💼 **Balance del día**")
-    st.bar_chart(pd.DataFrame({"Balance": [ingresos - egresos]}))
+    st.write(f"📥 Ingresos acumulados: **${total_ingresos:.2f}**")
+    st.write(f"📤 Egresos acumulados: **${total_egresos:.2f}**")
+    st.success(f"💼 Balance del ciclo: **${balance:.2f}**")
 
     st.markdown("---")
 
     # ============================================================
-    # 7️⃣ PDF DE LAS 3 GRÁFICAS + RESUMEN DEL DÍA
+    # 7️⃣ GRAFICAS (3) + EXPORTACIÓN PARA EL PDF
     # ============================================================
-    st.subheader("📄 Descargar PDF del día")
+    st.subheader("📈 Gráficas del ciclo")
 
-    if st.button("📥 Descargar PDF del reporte del día"):
+    # --- Obtener datos por fecha ---
+    cur.execute("""
+        SELECT fecha,
+               SUM(CASE WHEN tipo='Ingreso' THEN monto END) AS ing,
+               SUM(CASE WHEN tipo='Egreso' THEN monto END) AS egr
+        FROM caja_movimientos cm
+        JOIN caja_reunion cr ON cm.id_caja = cr.id_caja
+        WHERE cr.fecha >= %s
+        GROUP BY fecha
+        ORDER BY fecha ASC
+    """, (ciclo_inicio,))
+    rows = cur.fetchall()
 
-        nombre_pdf = f"reporte_dia_{fecha_sel}.pdf"
+    df = pd.DataFrame(rows)
+    df["ing"] = df["ing"].fillna(0)
+    df["egr"] = df["egr"].fillna(0)
+    df["saldo"] = df["ing"].cumsum() - df["egr"].cumsum()
+
+    # -------------- Gráfica 1: saldo acumulado --------------
+    fig1, ax1 = plt.subplots()
+    ax1.plot(df["fecha"], df["saldo"], marker="o")
+    ax1.set_title("Saldo acumulado del ciclo")
+    ax1.set_xlabel("Fecha")
+    ax1.set_ylabel("Saldo ($)")
+    plt.xticks(rotation=45)
+    st.pyplot(fig1)
+
+    g1_path = "/tmp/grafica1.png"
+    fig1.savefig(g1_path, dpi=150, bbox_inches="tight")
+
+    # -------------- Gráfica 2: ingresos vs egresos --------------
+    fig2, ax2 = plt.subplots()
+    ax2.plot(df["fecha"], df["ing"], label="Ingresos", color="green", marker="o")
+    ax2.plot(df["fecha"], df["egr"], label="Egresos", color="red", marker="o")
+    ax2.set_title("Ingresos vs Egresos (ciclo)")
+    plt.xticks(rotation=45)
+    ax2.legend()
+    st.pyplot(fig2)
+
+    g2_path = "/tmp/grafica2.png"
+    fig2.savefig(g2_path, dpi=150, bbox_inches="tight")
+
+    # -------------- Gráfica 3: resumen del día en barras --------------
+    fig3, ax3 = plt.subplots()
+    ax3.bar(["Ingresos", "Egresos", "Saldo Final"],
+            [ingresos, egresos, saldo_final],
+            color=["green", "red", "blue"])
+    ax3.set_title(f"Resumen del día {fecha_sel}")
+    st.pyplot(fig3)
+
+    g3_path = "/tmp/grafica3.png"
+    fig3.savefig(g3_path, dpi=150, bbox_inches="tight")
+
+    st.markdown("---")
+
+    # ============================================================
+    # 8️⃣ GENERAR PDF
+    # ============================================================
+    st.subheader("📄 Exportar reporte a PDF completo")
+
+    if st.button("📥 Descargar PDF"):
+
+        nombre_pdf = f"reporte_caja_{fecha_sel}.pdf"
         styles = getSampleStyleSheet()
         doc = SimpleDocTemplate(nombre_pdf, pagesize=letter)
         contenido = []
@@ -178,26 +231,37 @@ def reporte_caja():
         contenido.append(Paragraph(f"<b>Reporte de Caja — {fecha_sel}</b>", styles["Title"]))
         contenido.append(Spacer(1, 12))
 
-        tabla_resumen = [
+        # --- Tabla resumen ---
+        tabla_dia = [
             ["Campo", "Valor"],
             ["Saldo Inicial", f"${saldo_inicial:.2f}"],
             ["Ingresos", f"${ingresos:.2f}"],
             ["Egresos", f"${egresos:.2f}"],
-            ["Balance", f"${(ingresos - egresos):.2f}"],
             ["Saldo Final", f"${saldo_final:.2f}"],
-            ["Día Cerrado", "Sí" if dia_cerrado else "No"]
+            ["Día Cerrado", "Sí" if dia_cerrado else "No"],
         ]
+        t_day = Table(tabla_dia)
+        t_day.setStyle(TableStyle([("GRID", (0,0), (-1,-1), 1, colors.black)]))
+        contenido.append(t_day)
+        contenido.append(Spacer(1, 20))
 
-        t1 = Table(tabla_resumen)
-        t1.setStyle(TableStyle([("GRID", (0,0), (-1,-1), 1, colors.black)]))
+        # --- Inserción de las 3 gráficas ---
+        contenido.append(Paragraph("<b>Gráfica 1 — Saldo acumulado</b>", styles["Heading2"]))
+        contenido.append(Image(g1_path, width=480, height=250))
+        contenido.append(Spacer(1, 20))
 
-        contenido.append(t1)
+        contenido.append(Paragraph("<b>Gráfica 2 — Ingresos vs Egresos</b>", styles["Heading2"]))
+        contenido.append(Image(g2_path, width=480, height=250))
+        contenido.append(Spacer(1, 20))
+
+        contenido.append(Paragraph("<b>Gráfica 3 — Resumen del día</b>", styles["Heading2"]))
+        contenido.append(Image(g3_path, width=480, height=250))
 
         doc.build(contenido)
 
         with open(nombre_pdf, "rb") as f:
             st.download_button(
-                label="📄 Descargar PDF",
+                label="📄 Descargar PDF completo",
                 data=f,
                 file_name=nombre_pdf,
                 mime="application/pdf"
