@@ -1,11 +1,8 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import date, datetime, timedelta
 from modulos.conexion import obtener_conexion
-
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
+from modulos.caja import obtener_o_crear_reunion, registrar_movimiento
 
 
 def autorizar_prestamo():
@@ -35,10 +32,7 @@ def autorizar_prestamo():
 
         fecha_prestamo = st.date_input("📅 Fecha del préstamo", date.today())
 
-        socia_seleccionada = st.selectbox(
-            "👩 Socia que recibe el préstamo",
-            list(lista_socias.keys())
-        )
+        socia_seleccionada = st.selectbox("👩 Socia que recibe el préstamo", list(lista_socias.keys()))
         id_socia = lista_socias[socia_seleccionada]
 
         monto = st.number_input("💵 Monto prestado ($):", min_value=1, step=1)
@@ -74,66 +68,95 @@ def autorizar_prestamo():
             return
 
         # ======================================================
-        # VALIDAR CAJA GENERAL (caja_reunion)
+        # OBTENER O CREAR CAJA GENERAL PARA ESA FECHA
         # ======================================================
-        cursor.execute("""
-            SELECT id_caja, saldo_final
-            FROM caja_reunion
-            ORDER BY fecha DESC
-            LIMIT 1
-        """)
-        caja = cursor.fetchone()
+        id_caja = obtener_o_crear_reunion(str(fecha_prestamo))
 
-        if not caja:
-            st.error("❌ No existe caja general activa.")
-            return
-
-        id_caja = caja["id_caja"]
-        saldo_actual = float(caja["saldo_final"])
+        cursor.execute("SELECT saldo_final FROM caja_reunion WHERE id_caja=%s", (id_caja,))
+        saldo_actual = float(cursor.fetchone()["saldo_final"])
 
         if monto > saldo_actual:
             st.error(f"❌ Fondos insuficientes en caja general. Saldo disponible: ${saldo_actual}")
             return
 
-        saldo_pendiente = monto
+        # ======================================================
+        # CÁLCULOS DE INTERÉS Y CUOTAS
+        # ======================================================
+        interes_total = round((monto * tasa_interes) / 100, 2)
+        total_a_pagar = round(monto + interes_total, 2)
+        cuota_individual = round(total_a_pagar / cuotas, 2)
 
         # ======================================================
-        # REGISTRAR TODO
+        # REGISTRAR PRÉSTAMO
         # ======================================================
-        try:
-            # 1. PRÉSTAMO
+        cursor.execute("""
+            INSERT INTO Prestamo(
+                `Fecha del préstamo`, `Monto prestado`, `Tasa de interes`,
+                `Plazo`, `Cuotas`, `Saldo pendiente`, Estado_del_prestamo,
+                Id_Grupo, Id_Socia, Id_Caja
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,'activo',1,%s,%s)
+        """,
+        (
+            fecha_prestamo,
+            monto,
+            tasa_interes,
+            plazo,
+            cuotas,
+            total_a_pagar,
+            id_socia,
+            id_caja
+        ))
+
+        id_prestamo = cursor.lastrowid
+
+        # ======================================================
+        # REGISTRAR EGRESO EN CAJA REAL
+        # ======================================================
+        registrar_movimiento(
+            id_caja=id_caja,
+            tipo="Egreso",
+            categoria=f"Préstamo otorgado a {socia_seleccionada}",
+            monto=float(monto)
+        )
+
+        # ======================================================
+        # REGISTRO DE CUOTAS (cada 15 días)
+        # ======================================================
+        fecha_base = datetime.strptime(str(fecha_prestamo), "%Y-%m-%d")
+
+        for n in range(1, cuotas + 1):
+            fecha_cuota = fecha_base + timedelta(days=15*n)
             cursor.execute("""
-                INSERT INTO Prestamo(
-                    `Fecha del préstamo`, `Monto prestado`, `Tasa de interes`,
-                    `Plazo`, `Cuotas`, `Saldo pendiente`, Estado_del_prestamo,
-                    Id_Grupo, Id_Socia, Id_Caja
-                )
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                INSERT INTO Cuotas_prestamo
+                (Id_Prestamo, Numero_cuota, Fecha_programada, Monto_cuota, Estado)
+                VALUES (%s,%s,%s,%s,'pendiente')
             """,
             (
-                fecha_prestamo,
-                monto,
-                tasa_interes,
-                plazo,
-                cuotas,
-                saldo_pendiente,
-                "activo",
-                1,
-                id_socia,
-                id_caja
+                id_prestamo,
+                n,
+                fecha_cuota.strftime("%Y-%m-%d"),
+                cuota_individual
             ))
 
-            # 2. ACTUALIZAR CAJA GENERAL
-            cursor.execute("""
-                UPDATE caja_reunion
-                SET egresos = egresos + %s,
-                    saldo_final = saldo_final - %s
-                WHERE id_caja=%s
-            """, (monto, monto, id_caja))
+        con.commit()
 
-            con.commit()
+        st.success("✔ Préstamo autorizado correctamente.")
 
-            st.success("✔ Préstamo autorizado correctamente.")
+        # ======================================================
+        # MOSTRAR RESUMEN FINAL
+        # ======================================================
+        st.markdown("---")
+        st.subheader("📄 Resumen del préstamo")
 
-        except Exception as e:
-            st.error(f"❌ Error al registrar el préstamo: {e}")
+        st.write(f"📅 **Fecha:** {fecha_prestamo}")
+        st.write(f"👩 **Socia:** {socia_seleccionada}")
+        st.write(f"💵 **Monto prestado:** ${monto}")
+        st.write(f"📈 **Interés total:** ${interes_total}")
+        st.write(f"💰 **Total a pagar:** ${total_a_pagar}")
+        st.write(f"🧾 **Cuotas:** {cuotas} cuotas de ${cuota_individual}")
+
+        st.write("### 🗓 Calendario de cuotas:")
+        for n in range(1, cuotas + 1):
+            fecha_cuota = fecha_base + timedelta(days=15*n)
+            st.write(f"➡ **Cuota {n}:** {fecha_cuota.strftime('%Y-%m-%d')} — ${cuota_individual}")
