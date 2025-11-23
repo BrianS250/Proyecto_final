@@ -12,17 +12,17 @@ from modulos.reglas_utils import obtener_reglas
 
 
 # ============================================================
-# REPORTE DE CAJA COMPLETO
+# 📊 REPORTE DE CAJA COMPLETO
 # ============================================================
 def reporte_caja():
 
     st.title("📊 Reporte de Caja — Sistema Solidaridad CVX")
 
     con = obtener_conexion()
-    cursor = con.cursor(dictionary=True)
+    cur = con.cursor(dictionary=True)
 
     # ============================================================
-    # 1️⃣ CICLO – LEER DESDE reglas_internas
+    # 1️⃣ CICLO — LEER DESDE reglas internas
     # ============================================================
     reglas = obtener_reglas()
 
@@ -31,7 +31,6 @@ def reporte_caja():
         return
 
     ciclo_inicio = reglas.get("ciclo_inicio")
-    ciclo_fin = reglas.get("ciclo_fin")
 
     if not ciclo_inicio:
         st.error("⚠ Falta la fecha de inicio del ciclo en reglas internas.")
@@ -44,35 +43,30 @@ def reporte_caja():
     obtener_o_crear_reunion(hoy)
 
     # ============================================================
-    # 3️⃣ FECHAS DISPONIBLES
+    # 3️⃣ LISTA DE FECHAS REGISTRADAS
     # ============================================================
-    cursor.execute("SELECT fecha FROM caja_reunion ORDER BY fecha DESC")
-    fechas_raw = cursor.fetchall()
+    cur.execute("SELECT fecha FROM caja_reunion ORDER BY fecha DESC")
+    fechas_raw = cur.fetchall()
 
     if not fechas_raw:
         st.info("Aún no hay reuniones registradas.")
         return
 
-    fechas = [fila["fecha"] for fila in fechas_raw]
-
+    fechas = [f["fecha"] for f in fechas_raw]
     fecha_sel = st.selectbox("📅 Seleccione la fecha:", fechas)
 
     # ============================================================
     # 4️⃣ RESUMEN DEL DÍA
     # ============================================================
-    cursor.execute("""
-        SELECT *
-        FROM caja_reunion
-        WHERE fecha = %s
-    """, (fecha_sel,))
-    
-    reunion = cursor.fetchone()
+    cur.execute("SELECT * FROM caja_reunion WHERE fecha = %s", (fecha_sel,))
+    reunion = cur.fetchone()
 
     if not reunion:
-        st.warning("No se encontró información de caja para esta fecha.")
+        st.warning("No existe información de caja para esta fecha.")
         return
 
     id_caja = reunion["id_caja"]
+
     saldo_inicial = float(reunion["saldo_inicial"])
     ingresos = float(reunion["ingresos"])
     egresos = float(reunion["egresos"])
@@ -94,37 +88,39 @@ def reporte_caja():
     # ============================================================
     st.subheader("📋 Movimientos del día")
 
-    cursor.execute("""
+    cur.execute("""
         SELECT tipo, categoria, monto
         FROM caja_movimientos
         WHERE id_caja = %s
         ORDER BY id_mov ASC
     """, (id_caja,))
 
-    movimientos = cursor.fetchall()
+    movimientos = cur.fetchall()
 
-    if not movimientos:
-        st.info("No hay movimientos registrados en esta reunión.")
-    else:
+    if movimientos:
         df_mov = pd.DataFrame(movimientos)
         st.dataframe(df_mov, hide_index=True, use_container_width=True)
+    else:
+        st.info("No hay movimientos registrados en esta reunión.")
 
     st.markdown("---")
 
     # ============================================================
-    # 6️⃣ RESUMEN DEL CICLO
+    # 6️⃣ RESUMEN DEL CICLO — JOIN CORRECTO
     # ============================================================
     st.subheader("📊 Resumen general del ciclo")
 
-    cursor.execute("""
+    cur.execute("""
         SELECT 
-            IFNULL(SUM(CASE WHEN tipo='Ingreso' THEN monto END),0) AS total_ingresos,
-            IFNULL(SUM(CASE WHEN tipo='Egreso' THEN monto END),0) AS total_egresos
-        FROM caja_movimientos
-        WHERE fecha >= %s
+            IFNULL(SUM(CASE WHEN M.tipo = 'Ingreso' THEN M.monto END), 0) AS total_ingresos,
+            IFNULL(SUM(CASE WHEN M.tipo = 'Egreso' THEN M.monto END), 0) AS total_egresos
+        FROM caja_movimientos M
+        JOIN caja_reunion R ON R.id_caja = M.id_caja
+        WHERE R.fecha >= %s
     """, (ciclo_inicio,))
 
-    totales = cursor.fetchone()
+    totales = cur.fetchone()
+
     total_ingresos = float(totales["total_ingresos"])
     total_egresos = float(totales["total_egresos"])
     balance_ciclo = total_ingresos - total_egresos
@@ -134,9 +130,9 @@ def reporte_caja():
     st.success(f"💼 **Balance del ciclo:** ${balance_ciclo:.2f}")
 
     # ============================================================
-    # 7️⃣ GRÁFICAS SIN MATPLOTLIB
+    # 7️⃣ GRÁFICA BÁSICA NATIVA (sin matplotlib)
     # ============================================================
-    st.subheader("📈 Gráfica del ciclo (Streamlit)")
+    st.subheader("📈 Ingresos vs Egresos — Ciclo")
 
     df_chart = pd.DataFrame({
         "Categoria": ["Ingresos", "Egresos"],
@@ -145,25 +141,26 @@ def reporte_caja():
 
     st.bar_chart(df_chart, x="Categoria", y="Monto")
 
-    # Pie Chart por categorías usando plotly opcional
-    cursor.execute("""
+    # Distribución por categoría
+    cur.execute("""
         SELECT categoria, SUM(monto) AS total
-        FROM caja_movimientos
-        WHERE fecha >= %s
+        FROM caja_movimientos M
+        JOIN caja_reunion R ON R.id_caja = M.id_caja
+        WHERE R.fecha >= %s
         GROUP BY categoria
     """, (ciclo_inicio,))
-        
-    categorias = cursor.fetchall()
+
+    categorias = cur.fetchall()
 
     if categorias:
-        df_pie = pd.DataFrame(categorias)
         st.subheader("📊 Distribución por categoría")
-        st.bar_chart(df_pie, x="categoria", y="total")
+        df_cat = pd.DataFrame(categorias)
+        st.bar_chart(df_cat, x="categoria", y="total")
 
     st.markdown("---")
 
     # ============================================================
-    # 8️⃣ PDF
+    # 8️⃣ GENERAR PDF
     # ============================================================
     st.subheader("📄 Exportar reporte a PDF")
 
@@ -179,7 +176,9 @@ def reporte_caja():
         contenido.append(Paragraph(f"<b>Reporte de Caja — {fecha_sel}</b>", styles["Title"]))
         contenido.append(Spacer(1, 12))
 
-        # Tabla del día
+        # ------------------------
+        # TABLA DEL DÍA
+        # ------------------------
         tabla_dia = [
             ["Campo", "Valor"],
             ["Saldo Inicial", f"${saldo_inicial:.2f}"],
@@ -195,7 +194,9 @@ def reporte_caja():
         contenido.append(t_day)
         contenido.append(Spacer(1, 12))
 
-        # Tabla del ciclo
+        # ------------------------
+        # TABLA DEL CICLO
+        # ------------------------
         tabla_ciclo = [
             ["Campo", "Valor"],
             ["Ingresos acumulados", f"${total_ingresos:.2f}"],
@@ -219,5 +220,5 @@ def reporte_caja():
                 mime="application/pdf"
             )
 
-    cursor.close()
+    cur.close()
     con.close()
