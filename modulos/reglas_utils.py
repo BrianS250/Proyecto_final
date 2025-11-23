@@ -1,11 +1,6 @@
 from modulos.conexion import obtener_conexion
 
 def obtener_reglas():
-    """
-    Obtiene la única fila existente de reglas internas.
-    La tabla debe tener solo un registro vigente.
-    Devuelve un diccionario con todas las columnas.
-    """
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
 
@@ -14,6 +9,20 @@ def obtener_reglas():
 
     cursor.close()
     con.close()
-    return reglas
+
+    if not reglas:
+        return None
+
+    # Convertir claves a un dict limpio de Python
+    return {
+        "multa_inasistencia": float(reglas.get("multa_inasistencia", 0)),
+        "ahorro_minimo": float(reglas.get("ahorro_minimo", 0)),
+        "interes_por_10": float(reglas.get("interes_por_10", 0)),
+        "prestamo_maximo": float(reglas.get("prestamo_maximo", 0)),
+        "plazo_maximo": int(reglas.get("plazo_maximo", 0)),
+        "permisos_validos": reglas.get("permisos_inasistencia", "enfermedad, trabajo").strip(),
+        "multa_mora": float(reglas.get("multa_mora", 0)),   # ← NUEVO CAMPO
+    }
+
 
 
