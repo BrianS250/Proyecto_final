@@ -335,10 +335,10 @@ def pagina_multas():
 
         col6.write(str(m["Fecha_aplicacion"]))
 
-        # ------------------------------------------------------
+               # ------------------------------------------------------
         # BOTÓN ACTUALIZAR MULTA
         # ------------------------------------------------------
-        if col7.button("Actualizar", key=f"u_{m['Id_Multa']}}"):
+        if col7.button("Actualizar", key=f"u_{m['Id_Multa']}"):
 
             estado_anterior = m["Estado"]
 
@@ -370,6 +370,7 @@ def pagina_multas():
             con.commit()
             st.success("Multa actualizada correctamente.")
             st.rerun()
+
 # ============================================================
 # FIN DEL MÓDULO DIRECTIVA
 # ============================================================
