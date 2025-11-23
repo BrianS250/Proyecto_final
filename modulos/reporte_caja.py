@@ -102,7 +102,7 @@ def reporte_caja():
     st.markdown("---")
 
     # ============================================================
-    # 5️⃣ CIERRE DE DÍA (si no está cerrado)
+    # 5️⃣ CIERRE DE DÍA
     # ============================================================
     st.subheader("🧾 Cierre del día")
 
@@ -113,10 +113,7 @@ def reporte_caja():
 
         if st.button("✅ Cerrar este día definitivamente"):
 
-            # leer saldo real actual
             saldo_real = float(obtener_saldo_actual())
-
-            # verificar coherencia
             saldo_calculado = saldo_inicial + ingresos - egresos
 
             if abs(saldo_calculado - saldo_real) > 0.01:
@@ -128,7 +125,6 @@ def reporte_caja():
                 )
                 return
 
-            # marcar cierre
             cur.execute("""
                 UPDATE caja_reunion
                 SET dia_cerrado = 1, saldo_final = %s
@@ -167,7 +163,40 @@ def reporte_caja():
     st.markdown("---")
 
     # ============================================================
-    # 7️⃣ GENERAR PDF DEL REPORTE
+    # 7️⃣ GRÁFICAS DEL CICLO (NUEVO)
+    # ============================================================
+    st.subheader("📈 Gráficas del ciclo")
+
+    cur.execute("""
+        SELECT 
+            R.fecha,
+            IFNULL(R.ingresos, 0) AS ingresos,
+            IFNULL(R.egresos, 0) AS egresos,
+            (R.ingresos - R.egresos) AS consolidado
+        FROM caja_reunion R
+        WHERE R.fecha >= %s
+        ORDER BY R.fecha ASC
+    """, (ciclo_inicio,))
+
+    registros = cur.fetchall()
+
+    if registros:
+        df_graf = pd.DataFrame(registros)
+        df_graf["fecha"] = pd.to_datetime(df_graf["fecha"])
+
+        st.write("### 📥 Ingresos por fecha")
+        st.line_chart(df_graf.set_index("fecha")["ingresos"])
+
+        st.write("### 📤 Egresos por fecha")
+        st.line_chart(df_graf.set_index("fecha")["egresos"])
+
+        st.write("### 📊 Consolidado (Ingresos - Egresos)")
+        st.line_chart(df_graf.set_index("fecha")["consolidado"])
+
+    st.markdown("---")
+
+    # ============================================================
+    # 8️⃣ PDF
     # ============================================================
     st.subheader("📄 Exportar reporte a PDF")
 
