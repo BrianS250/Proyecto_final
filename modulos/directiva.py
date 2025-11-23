@@ -31,16 +31,12 @@ def interfaz_directiva():
 
     st.title("👩‍💼 Panel de Directiva — Solidaridad CVX")
 
-    # -------------------------------------------
     # BOTÓN DE CERRAR SESIÓN
-    # -------------------------------------------
     if st.sidebar.button("🔒 Cerrar sesión"):
         st.session_state.clear()
         st.rerun()
 
-    # -------------------------------------------
-    # MOSTRAR SALDO DE CAJA (saldo REAL)
-    # -------------------------------------------
+    # MOSTRAR SALDO REAL
     try:
         con = obtener_conexion()
         cur = con.cursor(dictionary=True)
@@ -51,9 +47,7 @@ def interfaz_directiva():
     except:
         st.warning("⚠ No se pudo obtener el saldo actual de caja.")
 
-    # -------------------------------------------
-    # MENÚ LATERAL
-    # -------------------------------------------
+    # MENÚ
     menu = st.sidebar.radio(
         "📌 Selección rápida:",
         [
@@ -70,42 +64,31 @@ def interfaz_directiva():
         ]
     )
 
-    # -------------------------------------------
-    # RUTEO DE TODAS LAS FUNCIONES
-    # -------------------------------------------
+    # RUTEO
     if menu == "Registro de asistencia":
         pagina_asistencia()
-
     elif menu == "Registrar nuevas socias":
         pagina_registro_socias()
-
     elif menu == "Reglas internas":
         gestionar_reglas()
-
     elif menu == "Registrar ahorro":
         ahorro()
-
     elif menu == "Aplicar multas":
         pagina_multas()
-
     elif menu == "Autorizar préstamo":
         autorizar_prestamo()
-
     elif menu == "Registrar pago de préstamo":
         pago_prestamo()
-
     elif menu == "Gastos del grupo":
         gastos_grupo()
-
     elif menu == "Reporte de caja":
         reporte_caja()
-
     elif menu == "Cierre de ciclo":
         cierre_ciclo()
 
 
 # ============================================================
-# 🎯 REGISTRO DE ASISTENCIA — SÍ/NO + TABLA EN LA POSICIÓN CORRECTA
+# 🎯 REGISTRO DE ASISTENCIA
 # ============================================================
 def pagina_asistencia():
 
@@ -170,8 +153,7 @@ def pagina_asistencia():
 
     if registros:
         st.subheader("📋 Asistencia registrada")
-        df_tabla = pd.DataFrame(registros)
-        st.dataframe(df_tabla, use_container_width=True)
+        st.dataframe(pd.DataFrame(registros), use_container_width=True)
 
     cur.execute("""
         SELECT Estado_asistencia
@@ -194,9 +176,7 @@ def pagina_asistencia():
 
     st.markdown("---")
 
-    # ===========================================================
-    # ⭐ INGRESOS EXTRAORDINARIOS
-    # ===========================================================
+    # INGRESOS EXTRAORDINARIOS
     st.subheader("💵 Registrar ingreso extraordinario (rifas, donaciones, etc.)")
 
     fecha_ing = st.date_input("📅 Fecha del ingreso:", date.today())
@@ -228,7 +208,7 @@ def pagina_asistencia():
 
 
 # ============================================================
-# REGISTRO DE NUEVAS SOCIAS
+# REGISTRO DE NUEVAS SOCIAS — 🎯 MEJORA APLICADA
 # ============================================================
 def pagina_registro_socias():
 
@@ -238,22 +218,35 @@ def pagina_registro_socias():
     cur = con.cursor(dictionary=True)
 
     nombre = st.text_input("Nombre completo de la socia:")
+    dui = st.text_input("Número de DUI (9 dígitos):", max_chars=9)
+    telefono = st.text_input("Número de teléfono (8 dígitos):", max_chars=8)
 
+    # Validación
     if st.button("Registrar socia"):
+
         if nombre.strip() == "":
             st.warning("Debe ingresar un nombre.")
             return
 
+        if not dui.isdigit() or len(dui) != 9:
+            st.warning("El DUI debe contener exactamente 9 dígitos numéricos.")
+            return
+
+        if not telefono.isdigit() or len(telefono) != 8:
+            st.warning("El teléfono debe contener exactamente 8 dígitos numéricos.")
+            return
+
         cur.execute("""
-            INSERT INTO Socia(Nombre, Sexo)
-            VALUES(%s, 'F')
-        """, (nombre,))
+            INSERT INTO Socia(Nombre, DUI, Telefono)
+            VALUES(%s, %s, %s)
+        """, (nombre, dui, telefono))
         con.commit()
 
         st.success(f"Socia '{nombre}' registrada correctamente.")
         st.rerun()
 
-    cur.execute("SELECT Id_Socia, Nombre FROM Socia ORDER BY Id_Socia ASC")
+    # Mostrar lista
+    cur.execute("SELECT Id_Socia, Nombre, DUI FROM Socia ORDER BY Id_Socia ASC")
     data = cur.fetchall()
 
     if data:
