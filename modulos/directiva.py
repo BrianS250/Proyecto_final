@@ -217,70 +217,45 @@ def pagina_registro_socias():
     con = obtener_conexion()
     cur = con.cursor(dictionary=True)
 
-    # ======== INPUT HTML DUI ========
-    dui = st.components.v1.html(
-        """
-        <input type="text" id="dui_field" maxlength="9"
-               oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,9);"
-               placeholder="Ingrese 9 dígitos"
-               style="
-                   width:100%; padding:10px; border-radius:6px;
-                   background:#2b2b2b; color:white; border:1px solid #555;
-               ">
-        <script>
-            const input = document.getElementById("dui_field");
-            input.oninput = () => {
-                input.value = input.value.replace(/[^0-9]/g,'').slice(0,9);
-            }
-        </script>
-        """,
-        height=80
-    )
-
-    # ======== INPUT HTML TELÉFONO ========
-    telefono = st.components.v1.html(
-        """
-        <input type="text" id="tel_field" maxlength="8"
-               oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,8);"
-               placeholder="Ingrese 8 dígitos"
-               style="
-                   width:100%; padding:10px; border-radius:6px;
-                   background:#2b2b2b; color:white; border:1px solid #555;
-               ">
-        <script>
-            const tel = document.getElementById("tel_field");
-            tel.oninput = () => {
-                tel.value = tel.value.replace(/[^0-9]/g,'').slice(0,8);
-            }
-        </script>
-        """,
-        height=80
-    )
-
+    # === ORDEN CORRECTO ===
     nombre = st.text_input("Nombre completo de la socia:")
 
+    dui = st.number_input(
+        "Número de DUI (9 dígitos):",
+        min_value=0,
+        max_value=999999999,
+        step=1,
+        format="%d"
+    )
+
+    telefono = st.number_input(
+        "Número de teléfono (8 dígitos):",
+        min_value=0,
+        max_value=99999999,
+        step=1,
+        format="%d"
+    )
+
+    # === Validación ===
     if st.button("Registrar socia"):
 
         if nombre.strip() == "":
             st.warning("Debe ingresar un nombre.")
             return
-        
-        # OBTENER LOS VALORES DESDE EL FRONTEND
-        dui_val = st.session_state.get("dui_field_value", "")
-        tel_val = st.session_state.get("tel_field_value", "")
 
-        if len(dui_val) != 9:
+        if len(str(dui)) != 9:
             st.warning("El DUI debe tener exactamente 9 dígitos.")
             return
 
-        if len(tel_val) != 8:
+        if len(str(telefono)) != 8:
             st.warning("El teléfono debe tener exactamente 8 dígitos.")
             return
 
+        # Guardar en BD
         cur.execute("""
             INSERT INTO Socia(Nombre, DUI, Telefono)
             VALUES(%s, %s, %s)
-        """, (nombre, dui_val, tel_val))
+        """, (nombre, str(dui), str(telefono)))
         con.commit()
 
         st.success(f"Socia '{nombre}' registrada correctamente.")
