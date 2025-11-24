@@ -22,7 +22,7 @@ def obtener_ciclo_activo():
 
 
 # ---------------------------------------------------------
-# OBTENER SALDO INICIAL (PRIMERA REUNIÓN DEL CICLO)
+# SALDO INICIAL (primer registro de caja dentro del ciclo)
 # ---------------------------------------------------------
 def obtener_saldo_inicial(fecha_inicio):
     con = obtener_conexion()
@@ -30,7 +30,7 @@ def obtener_saldo_inicial(fecha_inicio):
 
     cur.execute("""
         SELECT saldo_inicial 
-        FROM caja_reunion 
+        FROM caja_reunion
         WHERE fecha >= %s
         ORDER BY fecha ASC
         LIMIT 1
@@ -42,14 +42,14 @@ def obtener_saldo_inicial(fecha_inicio):
 
 
 # ---------------------------------------------------------
-# OBTENER SALDO FINAL (ÚLTIMA REUNIÓN DEL CICLO)
+# SALDO FINAL (último registro de caja dentro del ciclo)
 # ---------------------------------------------------------
 def obtener_saldo_final(fecha_inicio, fecha_fin):
     con = obtener_conexion()
     cur = con.cursor()
 
     cur.execute("""
-        SELECT saldo_final 
+        SELECT saldo_final
         FROM caja_reunion
         WHERE fecha BETWEEN %s AND %s
         ORDER BY fecha DESC
@@ -62,29 +62,29 @@ def obtener_saldo_final(fecha_inicio, fecha_fin):
 
 
 # ---------------------------------------------------------
-# RESUMEN DE MOVIMIENTOS DEL CICLO
+# RESUMEN DE MOVIMIENTOS REALES DEL CICLO
 # ---------------------------------------------------------
 def obtener_totales(fecha_inicio, fecha_fin):
     con = obtener_conexion()
     cur = con.cursor()
 
-    # INGRESOS
+    # TOTAL INGRESOS
     cur.execute("""
-        SELECT COALESCE(SUM(ingreso), 0)
-        FROM movimientos
+        SELECT COALESCE(SUM(ingresos), 0)
+        FROM caja_reunion
         WHERE fecha BETWEEN %s AND %s
     """, (fecha_inicio, fecha_fin))
     ingresos = cur.fetchone()[0]
 
-    # EGRESOS
+    # TOTAL EGRESOS
     cur.execute("""
-        SELECT COALESCE(SUM(egreso), 0)
-        FROM movimientos
+        SELECT COALESCE(SUM(egresos), 0)
+        FROM caja_reunion
         WHERE fecha BETWEEN %s AND %s
     """, (fecha_inicio, fecha_fin))
     egresos = cur.fetchone()[0]
 
-    # PRÉSTAMOS OTORGADOS
+    # PRESTAMOS OTORGADOS
     cur.execute("""
         SELECT COALESCE(SUM(Monto), 0)
         FROM prestamo
@@ -92,7 +92,7 @@ def obtener_totales(fecha_inicio, fecha_fin):
     """, (fecha_inicio, fecha_fin))
     prestados = cur.fetchone()[0]
 
-    # PRÉSTAMOS PAGADOS
+    # PAGOS DE PRÉSTAMO
     cur.execute("""
         SELECT COALESCE(SUM(Monto_pagado), 0)
         FROM pago_prestamo
@@ -100,7 +100,7 @@ def obtener_totales(fecha_inicio, fecha_fin):
     """, (fecha_inicio, fecha_fin))
     pagados = cur.fetchone()[0]
 
-    # MULTAS
+    # MULTAS APLICADAS
     cur.execute("""
         SELECT COALESCE(SUM(Monto), 0)
         FROM multa
@@ -108,7 +108,7 @@ def obtener_totales(fecha_inicio, fecha_fin):
     """, (fecha_inicio, fecha_fin))
     multas = cur.fetchone()[0]
 
-    # AHORRO
+    # AHORRO DE SOCIAS
     cur.execute("""
         SELECT COALESCE(SUM(Monto), 0)
         FROM ahorro
@@ -129,17 +129,15 @@ def cierre_ciclo():
 
     ciclo = obtener_ciclo_activo()
 
-    # -----------------------------------------------------
     # NO HAY CICLO ACTIVO
-    # -----------------------------------------------------
     if ciclo is None:
         st.warning("❌ No existe ningún ciclo activo. Debes iniciar uno primero.")
         return
 
-    st.info(f"📅 Ciclo iniciado en: **{ciclo['fecha_inicio']}**")
-
     fecha_inicio = ciclo["fecha_inicio"]
     fecha_fin = date.today().strftime("%Y-%m-%d")
+
+    st.info(f"📅 Ciclo iniciado el: **{fecha_inicio}**")
 
     # Totales del ciclo
     ingresos, egresos, prestados, pagados, multas, ahorro = obtener_totales(fecha_inicio, fecha_fin)
@@ -148,10 +146,10 @@ def cierre_ciclo():
     saldo_inicial = obtener_saldo_inicial(fecha_inicio)
     saldo_final = obtener_saldo_final(fecha_inicio, fecha_fin)
 
-    # -----------------------------------------------------
-    # RESUMEN VISUAL ANTES DE CERRAR
-    # -----------------------------------------------------
-    st.subheader("📘 Resumen del ciclo (previo al cierre):")
+    # -----------------------------
+    # RESUMEN VISUAL
+    # -----------------------------
+    st.subheader("📘 Resumen del ciclo:")
 
     st.write(f"**Saldo inicial:** ${saldo_inicial:,.2f}")
     st.write(f"**Saldo final:** ${saldo_final:,.2f}")
@@ -160,14 +158,14 @@ def cierre_ciclo():
     st.write(f"**Total egresos:** ${egresos:,.2f}")
     st.write(f"**Préstamos otorgados:** ${prestados:,.2f}")
     st.write(f"**Préstamos pagados:** ${pagados:,.2f}")
-    st.write(f"**Multas:** ${multas:,.2f}")
-    st.write(f"**Ahorro:** ${ahorro:,.2f}")
+    st.write(f"**Multas aplicadas:** ${multas:,.2f}")
+    st.write(f"**Ahorro de socias:** ${ahorro:,.2f}")
 
-    st.warning("🟠 Verifica la información antes de cerrar. Este proceso es definitivo.")
+    st.warning("🟠 Verifica la información antes de cerrar el ciclo. Este proceso es definitivo.")
 
-    # -----------------------------------------------------
-    # BOTÓN PARA CERRAR CICLO
-    # -----------------------------------------------------
+    # -----------------------------
+    # BOTÓN DE CIERRE
+    # -----------------------------
     if st.button("🔐 Cerrar ciclo ahora"):
         con = obtener_conexion()
         cur = con.cursor()
