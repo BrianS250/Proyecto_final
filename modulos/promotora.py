@@ -8,7 +8,6 @@ from modulos.conexion import obtener_conexion
 # OBTENER ID EMPLEADO (PROMOTORA)
 # =============================================================================
 def obtener_id_promotora():
-    """Retorna el Id_Empleado de la promotora logueada."""
     usuario = st.session_state.get("usuario", "")
 
     con = obtener_conexion()
@@ -21,7 +20,6 @@ def obtener_id_promotora():
     """, (usuario,))
 
     row = cursor.fetchone()
-
     cursor.close()
     con.close()
 
@@ -30,19 +28,18 @@ def obtener_id_promotora():
 
 
 # =============================================================================
-# PÁGINA PRINCIPAL DE PROMOTORA — CON MENÚ CENTRADO
+# INTERFAZ PRINCIPAL DE PROMOTORA — MENÚ CENTRADO + CERRAR SESIÓN
 # =============================================================================
 def interfaz_promotora():
 
-    # ------------------ TÍTULO CENTRADO ------------------
+    # ---------- TÍTULO CENTRADO ----------
     st.markdown("""
-        <h1 style="text-align:center;">
+        <h1 style="text-align:center; margin-bottom: 20px;">
             👩‍🦰 Panel de Promotora — Solidaridad CVX
         </h1>
-        <br>
     """, unsafe_allow_html=True)
 
-    # ------------------ CERRAR SESIÓN ------------------
+    # ---------- BOTÓN CERRAR SESIÓN ----------
     col1, col2 = st.columns([8, 2])
     with col2:
         if st.button("Cerrar sesión"):
@@ -50,30 +47,28 @@ def interfaz_promotora():
             st.session_state["rol"] = None
             st.rerun()
 
-    # ------------------ VALIDAR PROMOTORA ------------------
+    # ---------- VALIDAR PROMOTORA ----------
     id_promotora = obtener_id_promotora()
     if not id_promotora:
         st.error("⚠ No se pudo validar la promotora. Verifica el usuario.")
         return
 
-    # ------------------ MENÚ HORIZONTAL ------------------
+    # ---------- MENÚ HORIZONTAL ----------
     tabs = st.tabs([
         "➕ Crear grupo",
         "📘 Gestionar grupos",
         "📋 Ver grupos"
     ])
 
-    # CREAR GRUPO
+    # SECCIONES
     with tabs[0]:
-        st.subheader("➕ Crear nuevo grupo")
+        st.subheader("➕ Crear un nuevo grupo")
         crear_grupo(id_promotora)
 
-    # EDITAR + ELIMINAR GRUPO
     with tabs[1]:
-        st.subheader("📘 Gestionar grupos (editar / eliminar)")
+        st.subheader("📘 Gestionar grupos")
         gestionar_grupos(id_promotora)
 
-    # VER GRUPOS
     with tabs[2]:
         st.subheader("📋 Lista de grupos")
         ver_grupos(id_promotora)
@@ -81,68 +76,103 @@ def interfaz_promotora():
 
 
 # =============================================================================
-# CREAR GRUPO — NUEVO PROCESO COMPLETO
+# CREAR GRUPO — NUEVO PROCESO COMPLETO CON SELECTOR DE PERIODICIDAD
 # =============================================================================
 def crear_grupo(id_promotora):
 
     con = obtener_conexion()
     cursor = con.cursor(dictionary=True)
 
-    # Obtener DUI real de la promotora logueada
+    # Obtener DUI de promotora real
     cursor.execute("SELECT DUI FROM Empleado WHERE Id_Empleado = %s", (id_promotora,))
     promotora = cursor.fetchone()
     dui_promotora_real = promotora["DUI"]
 
-    # ------------------ PASO 1: DUI PARA VALIDAR IDENTIDAD ------------------
+    # -------------------------------------------------------------------------
+    # PASO 1 — VALIDAR DUI
+    # -------------------------------------------------------------------------
     st.write("### 🔒 Paso 1 — Validar identidad de la promotora")
 
     dui_ingresado = st.text_input("Ingrese su DUI (9 dígitos)").strip()
 
     if dui_ingresado:
         if not dui_ingresado.isdigit() or len(dui_ingresado) != 9:
-            st.error("❌ El DUI debe ser exactamente 9 dígitos.")
+            st.error("❌ DUI inválido: debe tener 9 dígitos.")
             return
         if dui_ingresado != dui_promotora_real:
             st.error("❌ El DUI no coincide con la promotora logueada.")
             return
 
-    # ------------------ PASO 2: CREAR USUARIO INTERNO ------------------
+    # -------------------------------------------------------------------------
+    # PASO 2 — CREAR USUARIO INTERNO DEL GRUPO
+    # -------------------------------------------------------------------------
     st.write("---")
-    st.write("### 👤 Paso 2 — Crear usuario interno del grupo")
+    st.write("### 👤 Paso 2 — Crear usuario directo para este grupo")
 
     usuario_grupo = st.text_input("Usuario del grupo").strip()
     password_grupo = st.text_input("Contraseña del grupo", type="password")
 
-    # Validar usuario no repetido
+    # validación de usuario único
     usuario_disponible = False
     if usuario_grupo != "":
-        cursor.execute("SELECT * FROM Empleado WHERE Usuario = %s", (usuario_grupo,))
+        cursor.execute("SELECT Usuario FROM Empleado WHERE Usuario = %s", (usuario_grupo,))
         existe = cursor.fetchone()
         if existe:
-            st.error("❌ Usuario ya existente. Ingrese uno diferente.")
+            st.error("❌ Este usuario ya existe. Ingrese otro.")
         else:
             usuario_disponible = True
 
-    # ------------------ PASO 3: DATOS BÁSICOS DEL GRUPO ------------------
+    # -------------------------------------------------------------------------
+    # PASO 3 — INFORMACIÓN DEL GRUPO
+    # -------------------------------------------------------------------------
     st.write("---")
     st.write("### 📝 Paso 3 — Información del grupo")
 
     nombre = st.text_input("Nombre del grupo")
-    tasa = st.number_input("Tasa de interés (%)", min_value=0.0, step=0.1)
-    periodicidad = st.number_input("Periodicidad de reuniones (días)", min_value=1, step=1)
-    distrito = st.number_input("ID del distrito", min_value=1, step=1)
-    fecha_inicio = st.date_input("Fecha de inicio", value=date.today())
 
-    # Validar que todo esté bien
-    datos_ok = (
-        dui_ingresado == dui_promotora_real
-        and usuario_grupo.strip() != ""
-        and password_grupo.strip() != ""
-        and usuario_disponible
-        and nombre.strip() != ""
+    # ---- SELECTOR DE PERIODICIDAD ----
+    st.write("#### Periodicidad de reuniones")
+
+    opcion_periodo = st.selectbox(
+        "Seleccione la periodicidad:",
+        ["Semanal (7 días)", "Quincenal (15 días)", "Mensual (30 días)", "Personalizado"]
     )
 
-    # ------------------ CREAR GRUPO ------------------
+    if opcion_periodo == "Semanal (7 días)":
+        periodicidad_valor = 7
+    elif opcion_periodo == "Quincenal (15 días)":
+        periodicidad_valor = 15
+    elif opcion_periodo == "Mensual (30 días)":
+        periodicidad_valor = 30
+    else:
+        periodicidad_valor = st.number_input(
+            "Ingrese número de días:",
+            min_value=1,
+            step=1
+        )
+
+    # ---- DISTRITO SOLO NUMÉRICO ----
+    distrito = st.number_input(
+        "ID del distrito",
+        min_value=1,
+        step=1,
+        format="%d"
+    )
+
+    fecha_inicio = st.date_input("Fecha de inicio", value=date.today())
+
+    # ---- Validación final ----
+    datos_ok = (
+        dui_ingresado == dui_promotora_real and
+        usuario_grupo.strip() != "" and
+        password_grupo.strip() != "" and
+        usuario_disponible and
+        nombre.strip() != ""
+    )
+
+    # -------------------------------------------------------------------------
+    # BOTÓN FINAL — Crear grupo
+    # -------------------------------------------------------------------------
     if st.button("Crear grupo", disabled=not datos_ok, type="primary"):
 
         # Crear usuario Directiva del grupo
@@ -159,7 +189,7 @@ def crear_grupo(id_promotora):
 
         id_directiva = cursor.lastrowid
 
-        # Crear grupo nuevo
+        # Crear el grupo en BD
         cursor.execute("""
             INSERT INTO Grupo(
                 Nombre_grupo, Tasa_de_interes, Periodicidad_reuniones,
@@ -167,7 +197,7 @@ def crear_grupo(id_promotora):
             )
             VALUES (%s,%s,%s,%s,%s,%s,%s)
         """, (
-            nombre, tasa, periodicidad, fecha_inicio,
+            nombre, 0, periodicidad_valor, fecha_inicio,
             id_promotora, distrito, id_directiva
         ))
 
@@ -240,8 +270,8 @@ def gestionar_grupos(id_promotora):
 
     nombre = st.text_input("Nombre", g["Nombre_grupo"])
     tasa = st.number_input("Tasa (%)", value=float(g["Tasa_de_interes"]))
-    periodicidad = st.number_input("Periodicidad", value=g["Periodicidad_reuniones"])
-    distrito = st.number_input("ID Distrito", value=g["Id_Distrito"])
+    periodicidad = st.number_input("Periodicidad (días)", value=int(g["Periodicidad_reuniones"]))
+    distrito = st.number_input("ID Distrito", value=int(g["Id_Distrito"]))
     fecha_inicio = st.date_input("Fecha inicio", value=g["Fecha_inicio"])
 
     if st.button("Guardar cambios", type="primary"):
