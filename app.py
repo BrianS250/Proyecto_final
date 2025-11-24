@@ -3,7 +3,7 @@ import streamlit as st
 from modulos.login import login
 from modulos.directiva import interfaz_directiva
 from modulos.promotora import interfaz_promotora
-from modulos.administrador import interfaz_admin  # ← LO DESACTIVAMOS PARA EVITAR EL ERROR
+from modulos.administrador import interfaz_administrador  # ← LO DESACTIVAMOS PARA EVITAR EL ERROR
 
 
 # -------------------------------
